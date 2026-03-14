@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+train/results/
+test/results/
+*.ckpt
+*.log
+envs/carla_route_env_old.py
