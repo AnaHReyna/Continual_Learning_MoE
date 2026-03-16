@@ -5,3 +5,4 @@ test/results/
 *.ckpt
 *.log
 envs/carla_route_env_old.py
+envs/tb_logs/

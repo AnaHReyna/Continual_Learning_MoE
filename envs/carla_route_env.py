@@ -1,3 +1,7 @@
+import sys
+sys.path.append("/home/ana/Documents/Architecture_Transformers_SR/scenario_runner")
+sys.path.append("/home/ana/CARLA_0.9.13/PythonAPI/carla")
+
 import math
 import queue
 import random
@@ -13,6 +17,9 @@ from gymnasium import spaces
 from srunner.tools.route_parser import RouteParser
 from srunner.tools.route_manipulation import interpolate_trajectory
 
+from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
+from srunner.scenarios.pedestrian_crossing import PedestrianCrossing
+
 
 class EnvConfig:
     host = "127.0.0.1"
@@ -21,7 +28,7 @@ class EnvConfig:
     timeout = 10.0
 
     route_file = "/home/ana/Documents/Architecture_Transformers_SR/scenario_runner/srunner/data/routes_devtest.xml"
-    scenario_file = "/home/ana/Documents/Architecture_Transformers_SR/scenario_runner/srunner/data/all_towns_traffic_scenarios1_3_4.json"
+    # scenario_file = "/home/ana/Documents/Architecture_Transformers_SR/scenario_runner/srunner/data/all_towns_traffic_scenarios1_3_4.json"
     route_id = None      # All episodes will use the first route in the file if route_id is not None. Otherwise, a random route from the file will be chosen for each episode.
     # route_id = "20"    # route_id can also be set to a specific value to always use the same route (useful for debugging)
     # route_towns = ["Town01", "Town03", "Town05"]
@@ -39,14 +46,24 @@ class EnvConfig:
     render_rgb_camera = True
 
     spectator_follow = True
-    spectator_height_m = 40.0
+    spectator_height_m = 5.0
     spectator_rotate_with_ego = False
 
     show_bev = True
     bev_width = 800
     bev_height = 800
-    bev_fov = 90
+    bev_fov = -90
     bev_height_m = 35.0
+
+
+class ScenarioConfig:
+    def __init__(self, trigger_point, route):
+        self.trigger_points = [trigger_point]
+        self.route = route
+        self.name = "PedestrianCrossing"
+        self.town = None
+        self.weather = carla.WeatherParameters().ClearNoon
+        self.friction = None
 
 
 class CollisionSensor:
@@ -247,6 +264,10 @@ class CarlaRouteEnv(gym.Env):
 
         self._bev_window_created = False
 
+        self.scenario = None
+        self.scenario_tree = None
+        self.scenario_criteria = []
+
 
     def _connect(self):
         self.client = carla.Client(self.cfg.host, self.cfg.port)
@@ -306,7 +327,7 @@ class CarlaRouteEnv(gym.Env):
             self.world = self.client.get_world()
             self.map = self.world.get_map()
 
-            self.traffic_manager.set_synchronous_mode(True)
+            self.traffic_manager.set_synchronous_mode(True)  
 
 
     def _cleanup_actors(self):
@@ -318,7 +339,7 @@ class CarlaRouteEnv(gym.Env):
         self.actor_handles.clear()
 
         if self.camera_sensor:
-            self.camera_sensor.destroy()
+            self.camera_sensor.destroy() # came
             self.camera_sensor = None
 
         if self.collision_sensor:
@@ -332,6 +353,12 @@ class CarlaRouteEnv(gym.Env):
         if self.bev_camera:
             self.bev_camera.destroy()
             self.bev_camera = None
+
+        if self.scenario is not None:
+            self.scenario.remove_all_actors()
+            self.scenario = None
+            self.scenario_tree = None
+            self.scenario_criteria = []
 
         self.ego = None
 
@@ -600,6 +627,52 @@ class CarlaRouteEnv(gym.Env):
 
         return terminated, truncated, info
     
+    
+     ############# Scenario Runner ##############
+    def _setup_scenario_runner_context(self):
+        CarlaDataProvider.set_client(self.client)
+        CarlaDataProvider.set_world(self.world)
+        CarlaDataProvider.set_traffic_manager_port(self.cfg.traffic_manager_port)
+        CarlaDataProvider.register_actor(self.ego)
+
+    def _setup_pedestrian_scenario(self):
+        fraction = self._rng.uniform(0.05, 0.10)
+        idx = int(fraction*len(self.route_waypoints))
+        # trigger_point = self.route_waypoints[idx]
+        trigger_point = self.route_waypoints[0]
+
+        config = ScenarioConfig(trigger_point=trigger_point,
+                                route=self.route_dense
+                                )
+        
+        self.scenario = PedestrianCrossing(world = self.world,
+                                           ego_vehicles=[self.ego],
+                                           config=config,
+                                           debug_mode=False,
+                                           criteria_enable=True,
+                                           timeout=60,
+                                           )
+        
+        # print("num other_actors:", len(self.scenario.other_actors))
+        # for i, actor in enumerate(self.scenario.other_actors):
+        #     print(i, actor, actor.get_location())
+        
+
+        # print("ATRIBUTOS DO CENARIO:")
+        # print(dir(self.scenario))
+
+        # print("scenario_tree?", hasattr(self.scenario, "scenario_tree"))
+        # print("scenario?", hasattr(self.scenario, "scenario"))
+        # print("behavior?", hasattr(self.scenario, "behavior"))
+        # print("criteria_tree?", hasattr(self.scenario, "criteria_tree"))
+
+        # self.scenario_tree = self.scenario.scenario_tree
+        self.scenario_tree = self.scenario.scenario.scenario_tree
+        # print("ATRIBUTOS DO WRAPPER SCENARIO:")
+        # print(dir(self.scenario_tree))
+        # self.scenario_criteria = self.scenario.test_criteria
+        self.scenario_criteria = self.scenario.criteria_list
+
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -632,10 +705,58 @@ class CarlaRouteEnv(gym.Env):
             for _ in range(5):
                 self.world.tick()
 
-        self._prepare_route()
+        self._prepare_route()        
         self._spawn_ego()
+
+        self._setup_scenario_runner_context()
+        self._setup_pedestrian_scenario()        
+
+        # ego_loc = self.ego.get_location()
+        # print("ego:", ego_loc)
+
+        # for i, actor in enumerate(self.scenario.other_actors):
+        #     walker_loc = actor.get_location()
+        #     dist = ego_loc.distance(walker_loc)
+        #     print(f"walker {i}: {walker_loc} dist={dist:.2f} m")
+        
+
+        # ego_loc = self.ego.get_location()
+        # walker_target = self.scenario._walker_data[0]["transform"].location
+        # dist = ego_loc.distance(walker_target)
+        # print("dist ego->walker_trigger:", dist)
+        # print("trigger_dist:", self.scenario._walker_data[0]["trigger_dist"])
+
         self._warmup_ticks()
         self._update_spectator()
+
+
+
+
+        # if self.scenario is not None and self.scenario.other_actors:
+        #     walker_loc = self.scenario.other_actors[0].get_location()
+        #     spectator = self.world.get_spectator()
+        #     spectator.set_transform(carla.Transform(walker_loc + carla.Location(z=15.0),
+        #                                             carla.Rotation(pitch=-90.0, yaw=0.0, roll=0.0)
+        #                                             )
+        #                             )
+
+
+        # if self.scenario is not None:
+        #     for actor in self.scenario.other_actors:
+        #         loc = actor.get_location()
+        #         self.world.debug.draw_point(loc,
+        #                                     size=0.25,
+        #                                     color=carla.Color(255, 0, 0),
+        #                                     life_time=10.0
+        #                                     )
+                
+        #         self.world.debug.draw_string(loc + carla.Location(z=1.0),
+        #                                     "PED",
+        #                                     draw_shadow=False,
+        #                                     color=carla.Color(255, 255, 255),
+        #                                     life_time=10.0
+        #                                     )
+
 
         if self.collision_sensor:
             self.collision_sensor.clear()
@@ -683,13 +804,29 @@ class CarlaRouteEnv(gym.Env):
         # print(f"steer={steer:.3f}, accel={accel:.3f}, throttle={throttle:.3f}, brake={brake:.3f}, speed={self._kmh(self.ego.get_velocity()):.2f}")
 
         self.world.tick()
+
         self.step_count += 1
+
+        if self.scenario_tree is not None:
+            self.scenario_tree.tick_once()
 
         self._update_spectator()
 
         obs = self._get_obs()
         reward = self._compute_reward()
         terminated, truncated, info = self._check_done()
+
+        self.scenario_done, scenario_info = self._check_scenario_done()
+        info.update(scenario_info)
+
+        print("tree status:", self.scenario_tree.status)
+
+        for i, actor in enumerate(self.scenario.other_actors):
+            print(f"walker {i}:", actor.get_location())
+
+
+        if self.scenario_done:
+            terminated = True
 
         if self.cfg.show_bev and self.bev_camera is not None:
             bev = self.bev_camera.get_latest()
@@ -710,8 +847,23 @@ class CarlaRouteEnv(gym.Env):
         return obs, reward, terminated, truncated, info
     
 
-    # def render(self):
-    #     pass
+
+    def _check_scenario_done(self):
+        if self.scenario_tree is None:
+            return False, {}
+        
+        info = {}
+
+        status = self.scenario_tree.status  
+        if status == "SUCCESS":
+            info["scenario_event"] = "success"
+            return True, info
+        
+        if status == "FAILURE":
+            info["scenario_event"] = "failure"
+            return True, info
+        
+        return False, info
 
 
     def close(self):
