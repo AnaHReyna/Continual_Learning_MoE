@@ -10,6 +10,7 @@ def make_env():
     cfg.traffic_manager_port = 8000
 
     cfg.route_file = "/home/ana/Documents/Architecture_Transformers_SR/scenario_runner/srunner/data/routes_devtest.xml" 
+    # cfg.route_file = "/home/ana/Documents/Architecture_Transformers_SR/scenario_runner/srunner/data/routes_training.xml"
     # cfg.scenario_file = "/home/ana/Documents/Architecture_Transformers_SR/scenario_runner/srunner/data/all_towns_traffic_scenarios1_3_4.json"
     # cfg.scenario_file = "/home/ana/Documents/Architecture_Transformers_SR/scenario_runner/srunner/data/all_towns_traffic_scenarios.json"
     cfg.scenario_file = None

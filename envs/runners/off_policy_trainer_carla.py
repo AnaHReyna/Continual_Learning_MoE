@@ -323,8 +323,7 @@ class Trainer:
 
             # if the episode is finished
             done_flag = done
-            if (hasattr(self._env, "_max_episode_steps") and
-                episode_steps == self._env._max_episode_steps):
+            if (hasattr(self._env, "_max_episode_steps") and episode_steps == self._env._max_episode_steps):
                 done_flag = False
             
             if (episode_steps%self.skip_timestep==0) or done or episode_steps == self._episode_max_steps:
@@ -420,13 +419,31 @@ class Trainer:
 
             # end of a episode
             if done or episode_steps == self._episode_max_steps: 
+                # print("[TRAINER-DEBUG] "
+                # f"success_flag={info.get('finish', False)} "
+                # f"done_reason={info.get('done_reason', None)} "
+                # f"progress={info.get('progress', None)} "
+                # f"dist_to_goal={info.get('dist_to_goal', None)} "
+                # f"lateral_error={info.get('lateral_error', None)} "
+                # f"route_index={info.get('route_index', None)}"
+                # )
                 # if task is successful
                 # success_log.append(1 if info[0] else 0)
                 if isinstance(info, dict):
                     success_flag = info.get("finish", False)
                 else:
                     success_flag = info[0]
-                success_log.append(1 if success_flag else 0)
+
+                # print(f"[TRAINER-DEBUG] success_flag={success_flag} info={info}")
+                
+
+                if success_flag:
+                    success_log.append(1)
+                else:
+                    success_log.append(0)   
+
+
+                # success_log.append(1 if success_flag else 0)
 
                 #process the rest pairs and clear the queue:
                 if self.make_predictions>0:
@@ -510,8 +527,11 @@ class Trainer:
 
                 if self.use_map:
                     obs, ego, map_s = obs
-                    map_s = self._adapt_map_state(map_s, neighbors=self.neighbors,
-                                      path_len=self.path_length, target_dim=5)
+                    map_s = self._adapt_map_state(map_s, 
+                                                  neighbors=self.neighbors,
+                                                  path_len=self.path_length, 
+                                                  target_dim=5
+                                                  )
                 
                 if isinstance(reset_info, dict):
                     vision = reset_info.get("vision", None)
@@ -520,7 +540,7 @@ class Trainer:
                 next_vision = None
 
                 if self.bptt_hidden>0:
-                    hidden,full_hidden = np.zeros((1,self.bptt_hidden)),np.zeros((self.timesteps,self.bptt_hidden))
+                    hidden,full_hidden = np.zeros((1,self.bptt_hidden)), np.zeros((self.timesteps,self.bptt_hidden))
                 else:
                     hidden,full_hidden,next_hidden=None,None,None
                 
@@ -602,8 +622,13 @@ class Trainer:
                 vn_batch = samples.get("next_vision", None) 
 
                 if self.pred_future_state and self.sep_train:
-                    simi_loss = self._policy.train_rep(state=samples["obs"], map_state=mp,
-                     future_state=f_s, future_map_state=f_m, future_action=f_a, vision=v_batch, next_vision=vn_batch)
+                    simi_loss = self._policy.train_rep(state=samples["obs"], 
+                                                              map_state=mp,
+                                                              future_state=f_s, 
+                                                              future_map_state=f_m, 
+                                                              future_action=f_a, 
+                                                              vision=v_batch, 
+                                                              next_vision=vn_batch)
                     if total_steps % 500==0:
                         print(f'similarity_loss:{np.mean(simi_loss)}')
                 
@@ -645,7 +670,7 @@ class Trainer:
                     replay_buffer.update_priorities(samples["indexes"], np.abs(td_error) + 1e-6)
 
             if total_steps % self._test_interval == 0:
-                avg_test_return, avg_test_steps,success_rate = self.evaluate_policy(total_steps)
+                avg_test_return, avg_test_steps, success_rate = self.evaluate_policy(total_steps)
                 self.eval_log.append(avg_test_return)
                 self.test_step.append(avg_test_steps)
                 self.test_success_rate.append(success_rate)
@@ -696,6 +721,7 @@ class Trainer:
         res = self.evaluate_policy(total_steps=0,plot_map_mode=plot_map_mode)
         print("Evaluation Total Steps: {0: 7} Average Reward {1: 5.4f},success rate:{3}, over {2: 2} episodes".format(
                     res[0], res[1], self._test_episodes,res[2]))
+        
 
     def evaluate_policy(self, total_steps,plot_map_mode=False):
         # tf.summary.experimental.set_step(total_steps)
@@ -837,10 +863,12 @@ class Trainer:
         self._normalize_obs = args.normalize_obs
         self._logdir = args.logdir
         self._model_dir = args.model_dir
+
         # replay buffer
         self._use_prioritized_rb = args.use_prioritized_rb
         self._use_nstep_rb = args.use_nstep_rb
         self._n_step = args.n_step
+
         # test settings
         self._test_interval = args.test_interval
         self._show_test_progress = args.show_test_progress

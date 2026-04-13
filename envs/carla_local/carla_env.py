@@ -237,22 +237,25 @@ class InterSection(object):
         # randomly choose spawned points
         lat_list = [-71, -70,
                     -97, -102, 
-                    -107, -103,
-                    
+                    -107, -103,                    
                     -45.5,-45.5,
                     -23.5, -12]
+        
+
         long_list = [-61.5, -57.5,
                      -42.5, -40.5, 
-                     -2.5, -2,
-                     
+                     -2.5, -2,                     
                      -24.5, -35,
                      -68.2, -68.2]
+        
+
         yaw_list = [0.0, 0.0,
                     -61.5, -63.7, 
                     -90, -90,
-
                     -90,-90,
                     180,180]
+        
+
         spawn_points = []
         
         random_vehicle_indexes = np.random.choice(len(lat_list), len(lat_list), replace=False)
@@ -389,14 +392,16 @@ class InterSection(object):
         # self.wp2 = np.load(script_dir+'/map/wp2.npy')
         state = self.get_observation_scene()
 
+
+
         self.sem_cam.set_attribute("image_size_x", f"{self.im_width}")
         self.sem_cam.set_attribute("image_size_y", f"{self.im_height}")
         self.sem_cam.set_attribute("fov", f"40")
 
         # camera_init_trans = carla.Transform(carla.Location(z=self.CAMERA_POS_Z, x=self.CAMERA_POS_X))    
         cam_bird_eye_view = carla.Transform(carla.Location(x=self.CAMERA_POS_X, y=0.0, z=self.CAMERA_POS_Z),  # altura grande = bird view
-                                            carla.Rotation(pitch=-90.0)               # olhar PARA BAIXO
-)    
+                                            carla.Rotation(pitch=-90.0))               # olhar PARA BAIXO
+    
         self.sensor_seg = self.world.spawn_actor(self.sem_cam, cam_bird_eye_view, attach_to=self.ego_vehicle)
         self.actor_list.append(self.sensor_seg)
         self.sensor_seg.listen(lambda data: self.process_img(data))

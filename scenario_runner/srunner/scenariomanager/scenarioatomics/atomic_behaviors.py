@@ -1388,6 +1388,95 @@ class AccelerateToCatchUp(AtomicBehavior):
             new_status = py_trees.common.Status.RUNNING
 
         return new_status
+    
+
+# class KeepVelocity(AtomicBehavior):
+
+#     def __init__(self, actor, target_velocity, duration=float("inf"), distance=float("inf"), name="KeepVelocity"):
+#         super(KeepVelocity, self).__init__(name, actor)
+#         self.logger.debug("%s.__init__()" % (self.__class__.__name__))
+#         self._target_velocity = target_velocity
+
+#         self._control, self._type = get_actor_control(actor)
+#         self._map = self._actor.get_world().get_map()
+#         self._waypoint = self._map.get_waypoint(self._actor.get_location())
+
+#         self._duration = duration
+#         self._target_distance = distance
+#         self._distance = 0
+#         self._start_time = 0
+#         self._location = None
+
+#         print("[DEBUG KeepVelocity __init__] actor:", actor)
+#         print("[DEBUG KeepVelocity __init__] actor type_id:", actor.type_id)
+#         print("[DEBUG KeepVelocity __init__] _type:", self._type)
+#         print("[DEBUG KeepVelocity __init__] target_velocity:", self._target_velocity)
+#         print("[DEBUG KeepVelocity __init__] duration:", self._duration)
+#         print("[DEBUG KeepVelocity __init__] distance:", self._target_distance)
+
+#     def initialise(self):
+#         self._location = CarlaDataProvider.get_location(self._actor)
+#         if self._location is None:
+#             self._location = self._actor.get_location()
+
+#         self._start_time = GameTime.get_time()
+
+#         print("[DEBUG KeepVelocity initialise] actor id:", self._actor.id)
+#         print("[DEBUG KeepVelocity initialise] actor location:", self._location)
+#         print("[DEBUG KeepVelocity initialise] _type:", self._type)
+
+#         if self._type == 'walker':
+#             self._control.speed = self._target_velocity
+
+#             actor_tf = CarlaDataProvider.get_transform(self._actor)
+#             if actor_tf is None:
+#                 actor_tf = self._actor.get_transform()
+
+#             self._control.direction = actor_tf.get_forward_vector()
+
+#             print("[DEBUG KeepVelocity initialise] walker speed:", self._control.speed)
+#             print("[DEBUG KeepVelocity initialise] walker direction:", self._control.direction)
+
+#         super(KeepVelocity, self).initialise()
+
+#     def update(self):
+#         new_status = py_trees.common.Status.RUNNING
+
+#         print("[DEBUG KeepVelocity update] actor id:", self._actor.id)
+#         print("[DEBUG KeepVelocity update] _type:", self._type)
+
+#         if self._type == 'vehicle':
+#             velocity = CarlaDataProvider.get_velocity(self._actor)
+#             if velocity is None:
+#                 velocity = self._actor.get_velocity().length()
+
+#             if velocity < self._target_velocity:
+#                 self._control.throttle = 1.0
+#             else:
+#                 self._control.throttle = 0.0
+
+#         self._actor.apply_control(self._control)
+
+#         new_location = CarlaDataProvider.get_location(self._actor)
+#         if new_location is None:
+#             new_location = self._actor.get_location()
+
+#         print("[DEBUG KeepVelocity update] old_location:", self._location)
+#         print("[DEBUG KeepVelocity update] new_location:", new_location)
+
+#         self._distance += calculate_distance(self._location, new_location)
+#         self._location = new_location
+
+#         print("[DEBUG KeepVelocity update] accumulated distance:", self._distance)
+
+#         if self._distance > self._target_distance:
+#             new_status = py_trees.common.Status.SUCCESS
+
+#         if GameTime.get_time() - self._start_time > self._duration:
+#             new_status = py_trees.common.Status.SUCCESS
+
+#         print("[DEBUG KeepVelocity update] status:", new_status)
+#         return new_status
 
 
 class KeepVelocity(AtomicBehavior):
