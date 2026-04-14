@@ -301,7 +301,7 @@ class CarlaRouteEnv(object):
         self.blueprint_library = None
         self.sem_cam = None
 
-        self.cnn_model = load_model("/home/ana/Documents/Architecture_Transformers_SR/CNN_image_embedding_model.h5", compile=False,)
+        self.cnn_model = load_model("/home/ana/Documents/Architecture_Transformers_SR/CNN_image_model.h5", compile=False,)
 
         self.prev_steer = 0.0
         self.target_speed = self.cfg.target_speed_kmh
@@ -411,6 +411,7 @@ class CarlaRouteEnv(object):
             dbg.draw_arrow(a, b, thickness=0.08, arrow_size=0.18, color=dir_color, life_time=life_time,)
 
 
+
     def _reset_policy_route_history(self):
         self.policy_route_history = []
         if self.ego is not None:
@@ -434,6 +435,7 @@ class CarlaRouteEnv(object):
         dbg.draw_line(a, b, thickness=0.10, color=color, life_time=life_time,)
 
         dbg.draw_point(b, size=0.10, color=color, life_time=life_time,)
+        
 
     # ---------------------------
     # Route setup

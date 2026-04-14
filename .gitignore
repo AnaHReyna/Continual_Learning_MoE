@@ -11,11 +11,8 @@ dataset_carla/
 dataset_carla_100000/
 Town03_CARLA/
 
-CNN_image_model.h5
-
 envs/carla_route_env_old.py
 collect_carla_steering_dataset.py
 train_image_model.py
 train/train_iterations.py
-envs/carla_route_env_old.py
 envs/carla_route_env_old.py

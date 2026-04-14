@@ -380,11 +380,11 @@ class Trainer:
                     if frame_steps >= self.make_predictions:
                         assert len(list(local_queue))==self.make_predictions
                         assert len(list(ego_queue))==self.make_predictions
-                        # [obs, action, next_obs, reward, done_flag, mask, hidden, next_mask, next_hidden,
-                        #     map_s, next_map_s, pred_ego, next_ego, vision, next_vision] = list(local_queue)[0]
+                        [obs, action, next_obs, reward, done_flag, mask, hidden, next_mask, next_hidden,
+                            map_s, next_map_s, pred_ego, next_ego, vision, next_vision] = list(local_queue)[0]
 
-                        [rb_obs, rb_action, rb_next_obs, rb_reward, rb_done_flag, rb_mask, rb_hidden, rb_next_mask, rb_next_hidden,
-                        rb_map_s, rb_next_map_s, rb_pred_ego, rb_next_ego, rb_vision, rb_next_vision] = list(local_queue)[0]
+                        # [rb_obs, rb_action, rb_next_obs, rb_reward, rb_done_flag, rb_mask, rb_hidden, rb_next_mask, rb_next_hidden,
+                        # rb_map_s, rb_next_map_s, rb_pred_ego, rb_next_ego, rb_vision, rb_next_vision] = list(local_queue)[0]
         
                         #full egos trajs and full mask
                         if self.use_map:
@@ -411,46 +411,46 @@ class Trainer:
                         else:
                             ego_mask = None
 
-                        # replay_buffer.add(obs=obs, 
-                        #                   act=action, 
-                        #                   next_obs=next_obs, 
-                        #                   rew=reward, 
-                        #                   done=done_flag,
-                        #                   mask=mask, 
-                        #                   hidden=hidden, 
-                        #                   next_mask=next_mask, 
-                        #                   next_hidden=next_hidden,
-                        #                   ego=egos,
-                        #                   ego_mask=ego_mask,
-                        #                   map_state=map_s,
-                        #                   next_map_state=next_map_s,
-                        #                   pred_ego=pred_ego, 
-                        #                   future_obs=fut_state, 
-                        #                   future_map_state=fut_map,
-                        #                  future_action=fut_action, 
-                        #                  vision=vision, 
-                        #                  next_vision=fut_vision)
+                        replay_buffer.add(obs=obs, 
+                                          act=action, 
+                                          next_obs=next_obs, 
+                                          rew=reward, 
+                                          done=done_flag,
+                                          mask=mask, 
+                                          hidden=hidden, 
+                                          next_mask=next_mask, 
+                                          next_hidden=next_hidden,
+                                          ego=egos,
+                                          ego_mask=ego_mask,
+                                          map_state=map_s,
+                                          next_map_state=next_map_s,
+                                          pred_ego=pred_ego, 
+                                          future_obs=fut_state, 
+                                          future_map_state=fut_map,
+                                         future_action=fut_action, 
+                                         vision=vision, 
+                                         next_vision=fut_vision)
 
-                        replay_buffer.add(obs=rb_obs,
-                                        act=rb_action,
-                                        next_obs=rb_next_obs,
-                                        rew=rb_reward,
-                                        done=rb_done_flag,
-                                        mask=rb_mask,
-                                        hidden=rb_hidden,
-                                        next_mask=rb_next_mask,
-                                        next_hidden=rb_next_hidden,
-                                        ego=egos,
-                                        ego_mask=ego_mask,
-                                        map_state=rb_map_s,
-                                        next_map_state=rb_next_map_s,
-                                        pred_ego=rb_pred_ego,
-                                        future_obs=fut_state,
-                                        future_map_state=fut_map,
-                                        future_action=fut_action,
-                                        vision=rb_vision,
-                                        next_vision=fut_vision
-                                    )
+                        # replay_buffer.add(obs=rb_obs,
+                        #                 act=rb_action,
+                        #                 next_obs=rb_next_obs,
+                        #                 rew=rb_reward,
+                        #                 done=rb_done_flag,
+                        #                 mask=rb_mask,
+                        #                 hidden=rb_hidden,
+                        #                 next_mask=rb_next_mask,
+                        #                 next_hidden=rb_next_hidden,
+                        #                 ego=egos,
+                        #                 ego_mask=ego_mask,
+                        #                 map_state=rb_map_s,
+                        #                 next_map_state=rb_next_map_s,
+                        #                 pred_ego=rb_pred_ego,
+                        #                 future_obs=fut_state,
+                        #                 future_map_state=fut_map,
+                        #                 future_action=fut_action,
+                        #                 vision=rb_vision,
+                        #                 next_vision=fut_vision
+                        #             )
 
                 else:
                     ego_mask=None
