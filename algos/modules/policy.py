@@ -422,7 +422,8 @@ class RLEncoder(tf.keras.Model):
                 no_neighbor_fut=False, 
                 carla=True,
                 use_vision=True,
-                vision_dim=128
+                vision_dim=128,
+                fusion_type='cross'
                 ):
         
         super().__init__(name=name)
@@ -446,62 +447,171 @@ class RLEncoder(tf.keras.Model):
 
         self.use_vision = use_vision
         self.vision_dim = vision_dim
+        self.fusion_type = fusion_type
+
+
+        if use_hier:
+            print('Use Hiereachial Transformer')
+            self.h_layer = Hierachial_Transformer(state_shape,
+                                                  units=units,
+                                                  num_heads=num_heads,
+                                                  drop_rate=0,
+                                                  neighbours=neighbours,
+                                                  make_rotation=make_rotation, 
+                                                  time_step=time_step, 
+                                                  num_traj=num_traj, 
+                                                  random_aug=random_aug, 
+                                                  no_ego_fut=no_ego_fut, 
+                                                  no_neighbor_fut=no_neighbor_fut, 
+                                                  carla=carla
+                                                  )   # state_shape = (6, 10, 5)
+
+
 
         if self.use_vision:
+            print('Use Vision Encoder')
             self.vision_encoder = VisionEncoder(out_dim=self.rep_dim)
-            self.vision_fusion = layers.Dense(self.rep_dim, activation='relu')
+            # self.vision_fusion = layers.Dense(self.rep_dim, activation='relu')
+            self.vision_attention = layers.MultiHeadAttention(num_heads=num_heads, 
+                                                              key_dim=self.rep_dim, 
+                                                              dropout=0.1, 
+                                                              output_shape=self.rep_dim
+                                                              )
+            
+        self.norm1 = layers.LayerNormalization(axis=1)
+        self.norm2 = layers.LayerNormalization(axis=-1)
+        self.norm3 = layers.LayerNormalization(axis=1)
 
-   
-        if use_hier:
-            print('use Hiereachial Transformer')
-            self.h_layer = Hierachial_Transformer(state_shape, units=units, num_heads=num_heads, drop_rate=0, 
-            neighbours=neighbours, make_rotation=make_rotation, time_step=time_step, num_traj=num_traj, 
-            random_aug=random_aug, no_ego_fut=no_ego_fut, no_neighbor_fut=no_neighbor_fut, carla=carla)   # state_shape = (6, 10, 5)
+        self.alpha = tf.Variable(1e-6, trainable=True, dtype=tf.float32)
+        self.beta = tf.Variable(1e-6, trainable=True, dtype=tf.float32)
 
-
-        dummy_state = tf.constant(np.zeros(shape=(32,) + state_shape, dtype=np.float32)) # (32, 6, 10, 5)
-        mask = tf.ones([32, dummy_state.get_shape()[1]])
-
-        if not bptt:  # Entra
-            m=mask
-            init_state=None
+        self.up_proj = layers.Dense(units=self.rep_dim*8, activation=None)
+        
+        self.out_proj = layers.Dense(units=self.rep_dim, activation=None)
+        
+        self.drop = layers.Dropout(0.1)
+        
+        if self.fusion_type == "cross":
+            self.down_proj = layers.Dense(units=self.rep_dim, activation=None)
+        elif self.fusion_type == "self":
+            self.down_proj = layers.Dense(units=self.rep_dim*2, activation=None)
         else:
-            m = mask
-            init_state = tf.zeros((32,256))
+            raise ValueError(f"attention type unkown! {self.fusion_type}")
+        
+        #################################### Antes descomentar  ##################################
+        
+        # dummy_state = tf.constant(np.zeros(shape=(32,) + state_shape, dtype=np.float32)) # (32, 6, 10, 5)
+        # mask = tf.ones([32, dummy_state.get_shape()[1]])
+
+        # if not bptt:  # Entra
+        #     m=mask
+        #     init_state=None
+        # else:
+        #     m = mask
+        #     init_state = tf.zeros((32,256))
+
+        # if use_map or use_hier:
+        #     map_s = tf.constant(np.zeros(shape=(32,) + (state_shape[0]*2,path_length,5), dtype=np.float32))
+        # else:
+        #     map_s = None
+
+
+        # self(dummy_state, mask=m, init_state=init_state, map_state=map_s)
+        # self.summary()
+            
+    
+        dummy_state = tf.zeros((1,) + state_shape, dtype=tf.float32)           # (1, 6, 10, 5)
+        dummy_mask  = tf.ones((1, state_shape[0]), dtype=tf.float32)           # (1, 6)
 
         if use_map or use_hier:
-            map_s = tf.constant(np.zeros(shape=(32,) + (state_shape[0]*2,path_length,5), dtype=np.float32))
+            dummy_map = tf.zeros((1, state_shape[0]*2, path_length, 5), dtype=tf.float32)
         else:
-            map_s = None
+            dummy_map = None
 
-        self(dummy_state, mask=m, init_state=init_state, map_state=map_s)
+        if self.use_vision:
+            dummy_vis = tf.zeros((1, vision_dim), dtype=tf.float32)
+            _ = self(dummy_state, dummy_mask, map_state=dummy_map, vision=dummy_vis, test=False)
+        else:
+            _ = self(dummy_state, dummy_mask, map_state=dummy_map, test=False)
+
         self.summary()
     
     
     def call(self, states, mask, test=False, init_state=None, map_state=None, curr_frames=None, aug=True, vision=None):
         """
         states:    [batch, 6, 10, 5]
-        vision:    [batch, vision_dim] (ex.: 280 do CNN)
+        vision:    [batch, vision_dim] (ex.: 280 of CNN)
         output:     (features, aux) with features [batch, num_traj, rep_dim]
         """
+
+
+        if isinstance(states, (list, tuple)):
+            vision = None
+            map_state = None
+
+            if (self.use_map or self.use_hier) and len(states) >= 4:
+                map_state = states[3]
+
+            mask = states[1]
+            states = states[0]
 
 
         if self.use_hier:
             if test:
                 # print(states.get_shape(),map_state.get_shape())
-                states,val = self.h_layer(states, test, map_state, aug)
+                states, val = self.h_layer(states, test, map_state, aug)
                 # return states,val
             else:
                 states = self.h_layer(states, test, map_state, aug)
+
         
         if self.use_vision and vision is not None:
-            v_emb = self.vision_encoder(vision)
-            v_emb = v_emb[:, tf.newaxis, :]  # (batch, 1, rep_dim)
-            v_emb = tf.repeat(v_emb, repeats=tf.shape(states)[1], axis=1)
-            fused = tf.concat([states, v_emb], axis=-1)
-            states = self.vision_fusion(fused)
+             ############################## CROSS-ATTENTION ###########################################################
+            if self.fusion_type == "cross":
+                vision_emb  = self.vision_encoder(vision)      # (32, 128)
+                vision_emb  = vision_emb[:, :, tf.newaxis]     # (32, 128, 1)
+                states      = tf.transpose(states, [0, 2, 1])  # (32, 128, 1)
+                states_norm = self.norm3(states)               # (32, 128, 1)
+
+                fused = self.vision_attention(query=self.norm1(vision_emb),  
+                                              value=states_norm,  
+                                              key=states_norm,   
+                                              training=not test)  # (32, 128, 1)
+                
+                fused = states + self.alpha*fused # (32, 128, 1)
+                fused = tf.transpose(fused, [0, 2, 1]) # (32, 1, 128)
+
+                fused = fused + self.beta*self.down_proj(tf.nn.gelu(self.up_proj(self.norm2(fused)))) # (32, 1, 1024) -> (32, 1, 256) = residual
+                
+                states = self.out_proj(self.drop(fused))
+
+            ############################## SELF-ATTENTION ###########################################################
+            elif self.fusion_type == "self":
+                vision_emb = self.vision_encoder(vision)  # (32, 128)
+                h = states   # (32, 1, 128)
+
+                vision_token = vision_emb[:, tf.newaxis, :]  # (32, 1, 128)
+                fused = tf.concat([h, vision_token], axis=-1)  # (32, 1, 256)
+                fused = tf.transpose(fused, [0, 2, 1]) # (32, 256, 1)
+
+                fused_norm = self.norm1(fused) 
+
+                fused_sa = self.vision_attention(query=fused_norm,
+                                                value=fused_norm,
+                                                key=fused_norm,
+                                                training=not test)  # (32, 256, 1)
+                
+                fused = fused + self.alpha*fused_sa  # (32, 256, 1) = residual
+                fused = tf.transpose(fused, [0, 2, 1])  # (32, 1, 256)
+
+                fused = fused + self.beta*self.down_proj(tf.nn.gelu(self.up_proj(self.norm2(fused)))) # (32, 1, 1024) -> (32, 1, 256) = residual
+            
+                states = self.out_proj(self.drop(fused))   # (32, 1, 128)
+            else:
+                raise RuntimeError(f"attention type unkown! {self.fusion_type}")
+        #########################################################################################################################
         
         if self.use_map:
-            return states, curr_frames
+            return states, curr_frames 
         
         return states, None

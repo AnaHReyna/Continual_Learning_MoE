@@ -583,24 +583,25 @@ class CarlaRouteEnv(object):
         assert self.world is not None
         assert self.map is not None
         assert self.route_config is not None
+        assert len(self.route_waypoints) > 0
 
         bp_lib = self.world.get_blueprint_library()
         ego_bp = bp_lib.find(self.cfg.ego_filter)
         ego_bp.set_attribute("role_name", "hero")
 
-        start_loc = self.route_config.trajectory[0]
-        start_wp = self.map.get_waypoint(start_loc)
-        base_tf = start_wp.transform
-    
+        base_tf = self.route_waypoints[0]
+
         self.ego = None
-        for dz in [0.5, 0.8, 1.0, 1.5]:
+        for dz in [0.3, 0.5, 0.8, 1.0, 1.5, 2.0]:
             spawn_transform = carla.Transform(base_tf.location, base_tf.rotation)
             spawn_transform.location.z += dz
             self.ego = self.world.try_spawn_actor(ego_bp, spawn_transform)
             if self.ego is not None:
                 break
-        
+
         if self.ego is None:
+            print("[SPAWN DEBUG] route waypoint 0:",
+                base_tf.location, base_tf.rotation)
             raise RuntimeError("Failed to spawn the ego vehicle at the start of the route.")
 
         self.actor_handles.append(self.ego)
@@ -1174,7 +1175,7 @@ class CarlaRouteEnv(object):
         self._prepare_route()
         self._spawn_ego()
         # self._spawn_background_traffic()
-        # self._setup_scenario_runner_context()
+        self._setup_scenario_runner_context()
         # self._setup_pedestrian_scenario()
 
         self._destroy_sensor_seg()

@@ -235,12 +235,12 @@ class Trainer:
         success_log = [0]
         best_train = -np.inf
 
-        replay_buffer = get_replay_buffer(
-                            self._policy, self._env, self._use_prioritized_rb, self._use_nstep_rb, 
-                            self._n_step,self._policy.memory_capacity, timesteps=self.timesteps, 
-                            bptt_hidden=self.bptt_hidden, make_predictions=self.make_predictions,
-                            use_map=self.use_map,path_length=self.path_length,neighbors=self.neighbors,
-                            multi_selection=self.multi_selection,represent=self.pred_future_state)
+        replay_buffer = get_replay_buffer(self._policy, self._env, self._use_prioritized_rb, self._use_nstep_rb, 
+                                          self._n_step,self._policy.memory_capacity, timesteps=self.timesteps, 
+                                          bptt_hidden=self.bptt_hidden, make_predictions=self.make_predictions,
+                                          use_map=self.use_map,path_length=self.path_length,neighbors=self.neighbors,
+                                          multi_selection=self.multi_selection,represent=self.pred_future_state
+                                         )
         
         if self.make_predictions>0:
             local_queue = deque(maxlen=self.make_predictions)
@@ -249,6 +249,7 @@ class Trainer:
             if self.pred_future_state:
                 fut_state_queue = deque(maxlen=self.make_predictions)
                 fut_action_queue = deque(maxlen=self.make_predictions)
+                fut_vision_queue = deque(maxlen=self.make_predictions)
                 if self.use_map:
                     fut_map_queue = deque(maxlen=self.make_predictions)
 
@@ -296,7 +297,17 @@ class Trainer:
                 if total_steps < self._policy.n_warmup:
                     action = self._env.action_space.sample()
                 else:
-                    action = self._policy.get_action(obs,mask=mask,map_state=np.expand_dims(map_s,axis=0),test=False)
+                    if vision is None:
+                        vision_batch = None
+                    else:
+                        vision_batch = np.expand_dims(vision, axis=0).astype(np.float32)
+
+                    action = self._policy.get_action(obs,
+                                                     mask=mask,
+                                                     map_state=np.expand_dims(map_s, axis=0),
+                                                     test=False,
+                                                     # vision = vision_batch
+                                                     )
                     # pred_ego = None   # Aqui comentei
                 act = action
 
@@ -354,6 +365,7 @@ class Trainer:
   
                         fut_state_queue.append(next_obs)
                         fut_action_queue.append(action)
+                        fut_vision_queue.append(next_vision)
                         # if self.use_map:
                             # fut_map_queue.append(next_map_s)
                         if self.use_map:
@@ -368,8 +380,11 @@ class Trainer:
                     if frame_steps >= self.make_predictions:
                         assert len(list(local_queue))==self.make_predictions
                         assert len(list(ego_queue))==self.make_predictions
-                        [obs, action, next_obs, reward, done_flag, mask, hidden, next_mask, next_hidden,
-                            map_s, next_map_s, pred_ego, next_ego, vision, next_vision] = list(local_queue)[0]
+                        # [obs, action, next_obs, reward, done_flag, mask, hidden, next_mask, next_hidden,
+                        #     map_s, next_map_s, pred_ego, next_ego, vision, next_vision] = list(local_queue)[0]
+
+                        [rb_obs, rb_action, rb_next_obs, rb_reward, rb_done_flag, rb_mask, rb_hidden, rb_next_mask, rb_next_hidden,
+                        rb_map_s, rb_next_map_s, rb_pred_ego, rb_next_ego, rb_vision, rb_next_vision] = list(local_queue)[0]
         
                         #full egos trajs and full mask
                         if self.use_map:
@@ -381,6 +396,7 @@ class Trainer:
                         if self.pred_future_state:
                             fut_action=np.array(list(fut_action_queue))
                             fut_state = np.array(list(fut_state_queue))
+                            fut_vision = np.array(list(fut_vision_queue), dtype=np.float32)
                             if self.use_map:
                                 fut_map = np.array(list(fut_map_queue))
                             else:
@@ -395,11 +411,46 @@ class Trainer:
                         else:
                             ego_mask = None
 
-                        replay_buffer.add(obs=obs, act=action, next_obs=next_obs, rew=reward, done=done_flag,
-                                        mask=mask, hidden=hidden, next_mask=next_mask, next_hidden=next_hidden,
-                                        ego=egos,ego_mask=ego_mask,map_state=map_s,next_map_state=next_map_s,
-                                        pred_ego=pred_ego, future_obs=fut_state, future_map_state=fut_map,
-                                        future_action=fut_action, vision=vision, next_vision=next_vision)
+                        # replay_buffer.add(obs=obs, 
+                        #                   act=action, 
+                        #                   next_obs=next_obs, 
+                        #                   rew=reward, 
+                        #                   done=done_flag,
+                        #                   mask=mask, 
+                        #                   hidden=hidden, 
+                        #                   next_mask=next_mask, 
+                        #                   next_hidden=next_hidden,
+                        #                   ego=egos,
+                        #                   ego_mask=ego_mask,
+                        #                   map_state=map_s,
+                        #                   next_map_state=next_map_s,
+                        #                   pred_ego=pred_ego, 
+                        #                   future_obs=fut_state, 
+                        #                   future_map_state=fut_map,
+                        #                  future_action=fut_action, 
+                        #                  vision=vision, 
+                        #                  next_vision=fut_vision)
+
+                        replay_buffer.add(obs=rb_obs,
+                                        act=rb_action,
+                                        next_obs=rb_next_obs,
+                                        rew=rb_reward,
+                                        done=rb_done_flag,
+                                        mask=rb_mask,
+                                        hidden=rb_hidden,
+                                        next_mask=rb_next_mask,
+                                        next_hidden=rb_next_hidden,
+                                        ego=egos,
+                                        ego_mask=ego_mask,
+                                        map_state=rb_map_s,
+                                        next_map_state=rb_next_map_s,
+                                        pred_ego=rb_pred_ego,
+                                        future_obs=fut_state,
+                                        future_map_state=fut_map,
+                                        future_action=fut_action,
+                                        vision=rb_vision,
+                                        next_vision=fut_vision
+                                    )
 
                 else:
                     ego_mask=None
@@ -452,6 +503,7 @@ class Trainer:
                     if self.pred_future_state:
                         shape_a = list(fut_action_queue)[0].shape
                         shape_s = list(fut_state_queue)[0].shape
+                        shape_v = list(fut_vision_queue)[0].shape
                         if self.use_map:
                             shape_m = list(fut_map_queue)[0].shape
 
@@ -463,22 +515,44 @@ class Trainer:
                         
                         if self.pred_future_state:
                             if len(list(fut_state_queue))==0:
-                                fut_state = np.zeros((self.make_predictions,)+shape_s)
-                                fut_action = np.zeros((self.make_predictions,)+shape_a)
+                                fut_state = np.zeros((self.make_predictions,) + shape_s)
+                                fut_action = np.zeros((self.make_predictions,) + shape_a)
+                                fut_vision = np.zeros((self.make_predictions,) + shape_v)
                                 if self.use_map:
-                                    fut_map = np.zeros((self.make_predictions,)+shape_m)
+                                    fut_map = np.zeros((self.make_predictions,) + shape_m)
                             else:
-                                fut_state = np.concatenate( (np.array(list(fut_state_queue)) , np.zeros((self.make_predictions - len(list(fut_state_queue)),)+shape_s) ),axis=0)
-                                fut_action = np.concatenate( (np.array(list(fut_action_queue)) , np.zeros((self.make_predictions - len(list(fut_action_queue)),)+shape_a) ),axis=0)
+                                fut_state = np.concatenate( (np.array(list(fut_state_queue)) , 
+                                                             np.zeros((self.make_predictions - len(list(fut_state_queue)),) + shape_s) ),
+                                                             axis=0
+                                                             )
+                                
+                                fut_action = np.concatenate( (np.array(list(fut_action_queue)) , 
+                                                              np.zeros((self.make_predictions - len(list(fut_action_queue)),) + shape_a) ),
+                                                              axis=0
+                                                              )
+                                
+                                fut_vision = np.concatenate((np.array(list(fut_vision_queue)),
+                                                             np.zeros((self.make_predictions - len(list(fut_vision_queue)),) + shape_v)), 
+                                                             axis=0
+                                                            )
+                                
                                 if self.use_map:
-                                    fut_map = np.concatenate( (np.array(list(fut_map_queue)) , np.zeros((self.make_predictions - len(list(fut_map_queue)),)+shape_m) ),axis=0)
+                                    fut_map = np.concatenate( (np.array(list(fut_map_queue)), 
+                                                               np.zeros((self.make_predictions - len(list(fut_map_queue)),) + shape_m) ),
+                                                               axis=0
+                                                            )
                             
                             fut_state_queue.popleft()
                             fut_action_queue.popleft()
+                            fut_vision_queue.popleft()
+
                             if self.use_map:
                                 fut_map_queue.popleft()
+
                             assert len(list(local_queue))==len(list(fut_state_queue)),(len(list(local_queue)),len(list(fut_state_queue)))
                             assert len(list(local_queue))==len(list(fut_action_queue))
+                            assert len(list(local_queue)) == len(list(fut_vision_queue))
+
                             if self.use_map:
                                 assert len(list(local_queue))==len(list(fut_map_queue))
                             else:
@@ -487,6 +561,7 @@ class Trainer:
                             fut_state=None
                             fut_map=None
                             fut_action=None
+                            fut_vision = None
 
                         if self.use_map:
                             if len(list(ego_queue))==0:
@@ -499,13 +574,28 @@ class Trainer:
 
                             ego_mask = [1]*len(list(ego_queue)) +[0]*(self.make_predictions - len(list(ego_queue)))
                         else:
-                            egos,ego_mask = None,None
+                            egos,ego_mask = None, None
 
-                        replay_buffer.add(
-                                    obs=obs, act=action, next_obs=next_obs, rew=reward, done=done_flag, mask=mask, 
-                                    hidden=hidden, next_mask=next_mask, next_hidden=next_hidden, ego=egos, ego_mask=ego_mask, 
-                                    map_state=map_s, next_map_state=next_map_s, pred_ego=pred_ego, future_obs=fut_state, 
-                                    future_map_state=fut_map, future_action=fut_action, vision=vision, next_vision=next_vision)
+                        replay_buffer.add(obs=obs, 
+                                          act=action, 
+                                          next_obs=next_obs, 
+                                          rew=reward, 
+                                          done=done_flag, 
+                                          mask=mask, 
+                                          hidden=hidden, 
+                                          next_mask=next_mask, 
+                                          next_hidden=next_hidden, 
+                                          ego=egos, 
+                                          ego_mask=ego_mask, 
+                                          map_state=map_s, 
+                                          next_map_state=next_map_s, 
+                                          pred_ego=pred_ego, 
+                                          future_obs=fut_state, 
+                                          future_map_state=fut_map, 
+                                          future_action=fut_action, 
+                                          vision=vision, 
+                                          next_vision=fut_vision
+                                          )
                     
                     assert len(list(local_queue))==0
                     if self.use_map:
@@ -516,6 +606,7 @@ class Trainer:
                         
                         assert len(list(fut_state_queue))==0
                         assert len(list(fut_action_queue))==0
+                        assert len(list(fut_vision_queue)) == 0
                         if self.use_map:
                             assert len(list(fut_map_queue))==0
                         
@@ -634,21 +725,23 @@ class Trainer:
                 
                 with self.tb_train.as_default():
                     with tf.summary.record_if(total_steps % self._save_summary_interval == 0):
-                        _,pred_traj,pred_loss = self._policy.train(
-                            samples["obs"], samples["act"], samples["next_obs"],
-                            samples["rew"], np.array(samples["done"], dtype=np.float32),
-                            None if not self._use_prioritized_rb else samples["weights"],
-                            mask=m,
-                            hidden=h,
-                            next_mask=nm,
-                            next_hidden=nh,
-                            ego=eg,
-                            ego_mask=ego_m,
-                            map_state=mp,
-                            next_map_state=n_mp,
-                            hist_traj=pd,
-                            future_state=f_s, future_map_state=f_m, future_action=f_a
-                            )
+                        _,pred_traj,pred_loss = self._policy.train(samples["obs"], 
+                                                                   samples["act"], 
+                                                                   samples["next_obs"],
+                                                                   samples["rew"], 
+                                                                   np.array(samples["done"], dtype=np.float32),
+                                                                   None if not self._use_prioritized_rb else samples["weights"],
+                                                                   mask=m,
+                                                                   hidden=h,
+                                                                   next_mask=nm,
+                                                                   next_hidden=nh,
+                                                                   ego=eg,
+                                                                   ego_mask=ego_m,
+                                                                   map_state=mp,
+                                                                   next_map_state=n_mp,
+                                                                   hist_traj=pd,
+                                                                   future_state=f_s, future_map_state=f_m, future_action=f_a
+                                                                   )
                         # if total_steps % 1000==0 and self.pred_future_state and not self.sep_train:
                         #     print(f'similarity_loss:{np.mean(pred_loss.numpy())/self.make_predictions}')
                     
@@ -770,8 +863,17 @@ class Trainer:
                     mask=None
 
                 if epi_step%self.skip_timestep==0:
+                    # if vision is None:
+                    #     vision_batch = None
+                    # else:
+                    #     vision_batch = np.expand_dims(vision, axis=0).astype(np.float32)
                 
-                    action = self._policy.get_action(np.expand_dims(obs,0),test=True,mask=mask,map_state=np.expand_dims(map_s,0))
+                    action = self._policy.get_action(np.expand_dims(obs, 0),
+                                                     test=True,
+                                                     mask=mask,
+                                                     map_state=np.expand_dims(map_s,0),
+                                                     # visoon=vision_batch,
+                                                     )
                     act = action[0].numpy()
                 
                 next_obs, reward, done, info = self._test_env.step( act)

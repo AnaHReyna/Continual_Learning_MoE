@@ -109,7 +109,9 @@ def set_off_policy_configs(args, test=False):
                         'no_ego_fut':False,
                         'no_neighbor_fut':False,
                         'carla': (scenario =='carla'),
-                        'units': 128
+                        'units': 128, 
+                        'use_vision': True,
+                        'vision_dim': 280
                         }
 
     if scenario in ['carla', 'cross']:

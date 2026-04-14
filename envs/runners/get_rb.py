@@ -46,8 +46,17 @@ def get_replay_buffer(policy, env, use_prioritized_rb=False, use_nstep_rb=False,
     obs_shape = get_space_size(env.observation_space)
     kwargs = get_default_rb_dict(policy.memory_capacity, env)
 
-    kwargs["env_dict"]["vision"] = {"shape":(280,), "dtype": np.float32}
-    kwargs["env_dict"]["next_vision"] = {"shape":(280,), "dtype": np.float32}
+    vision_dim = 280
+    kwargs["env_dict"]["vision"] = {"shape":(vision_dim,), "dtype": np.float32}
+    if represent:
+        kwargs["env_dict"]["next_vision"] = {"shape": (make_predictions, vision_dim),
+                                             "dtype": np.float32
+                                             }
+    
+    else:
+        kwargs["env_dict"]["next_vision"] = {"shape":(vision_dim,), 
+                                             "dtype": np.float32
+                                             }
 
     if size is not None:
         kwargs["size"] = size
