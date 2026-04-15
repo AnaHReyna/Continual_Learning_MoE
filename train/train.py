@@ -3,6 +3,8 @@ sys.path.append('../')
 import tensorflow as tf
 import gym
 from envs.carla_route_env import CarlaRouteEnv, EnvConfig
+from tasks.lane_keeping import LaneKeepingTask
+from tasks.pedestrian import PedestrianTask
 from init_configs import get_argument, set_configs
 from algos.sac import SAC
 from envs.runners.off_policy_trainer_carla import Trainer
@@ -23,19 +25,13 @@ else:
     print("Treinando na CPU.")
 
     
-OBSERVATION_SPACE = gym.spaces.Box(low=-1000, 
-                                    high=1000, 
-                                    shape=(args.neighbors + 1, args.N_steps, args.dim,)
-                                    )  
+OBSERVATION_SPACE = gym.spaces.Box(low=-1000, high=1000, shape=(args.neighbors + 1, args.N_steps, args.dim,))  
 
-ACTION_SPACE = gym.spaces.Box(low=-1.0, 
-                              high=1.0, 
-                              shape=(2,)
-                              )
+ACTION_SPACE = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
     
-
 cfg = EnvConfig()
-env = CarlaRouteEnv(cfg)
+task = LaneKeepingTask()
+env = CarlaRouteEnv(cfg, task=task)
 env.observation_space = OBSERVATION_SPACE
 env.action_space = ACTION_SPACE
 

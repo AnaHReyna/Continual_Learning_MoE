@@ -415,8 +415,7 @@ class Represent_Learner(tf.keras.Model):
             features = layer(features)
         return features
     
-    def _make_recurrent_rep(
-                            self,
+    def _make_recurrent_rep(self,
                             states,
                             map_state,
                             actions,
@@ -426,7 +425,8 @@ class Represent_Learner(tf.keras.Model):
                             test = False,
                             init_state = None,
                             vision = None,
-                            next_vision = None):
+                            next_vision = None
+                            ):
 
         f_z = []
         f_z_f = []
