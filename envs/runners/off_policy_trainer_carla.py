@@ -158,14 +158,14 @@ class Trainer:
 
     def _adapt_map_state(self, ms, neighbors=5, path_len=10, target_dim=5):
         """
-        Converte CARLA map_s (18,10,2) -> (12,10,5)
-        Mantém 2 rotas por agente; faz pad/trunc das features até target_dim.
+        Convert CARLA map_s (18,10,2) -> (12,10,5)
+        Keeps 2 routes per agent; performs pad/trunc of features up to target_dim.
         """
         if ms is None:
             return None
         ms = np.asarray(ms)
         if ms.ndim != 3 or ms.shape[1] != path_len:
-            return ms  # já está no formato esperado
+            return ms 
 
         n_agents = neighbors + 1 
         K, L, F = ms.shape  # (K=18, L=10, F=2)
@@ -175,11 +175,11 @@ class Trainer:
         else:
             n_heads = 2
 
-        # reshape para (agentes, rotas, L, F)
+        # reshape for (agents, routes, L, F)
         try:
             ms = ms.reshape(n_agents, n_heads, L, F)
         except Exception:
-            # se não der, tenta truncar/duplicar K para encaixar
+            # If that doesn't work, try truncating/duplicating K to fit it.
             want = n_agents * max(2, n_heads)
             if K < want:
                 reps = int(np.ceil(want / K))
@@ -189,17 +189,17 @@ class Trainer:
             n_heads = want // n_agents
             ms = ms.reshape(n_agents, n_heads, L, F)
 
-        # escolhe 2 rotas por agente: use as laterais [0, -1] (descarta a central)
+        # Choose 2 routes per agent: use the side routes [0, -1] (discard the central route)
         if n_heads >= 2:
-            ms = ms[:, (0, -1), :, :]          # (agentes, 2, L, F)
+            ms = ms[:, (0, -1), :, :]          # (agents, 2, L, F)
         else:
-            # se só há 1, duplique
+            # If there is only 1, duplicate it.
             ms = np.repeat(ms, 2, axis=1)
 
-        # volta para (agentes*2, L, F) -> ex.: (12,10,2)
+        # returns to (agents*2, L, F) -> ex.: (12,10,2)
         ms = ms.reshape(n_agents * 2, L, F)
 
-        # pad/trunc de features para target_dim (ex.: 5)
+        # pad/feature trunc to target_dim (e.g.: 5)
         f = ms.shape[-1]
         if f < target_dim:
             pad = np.zeros(ms.shape[:-1] + (target_dim - f,), dtype=ms.dtype)
@@ -482,16 +482,27 @@ class Trainer:
                 # success_log.append(1 if info[0] else 0)
                 if isinstance(info, dict):
                     success_flag = info.get("finish", False)
+                    done_reason = info.get("done_reason", None)
                 else:
                     success_flag = info[0]
+                    done_reason = None
 
                 # print(f"[TRAINER-DEBUG] success_flag={success_flag} info={info}")
                 
+                if done_reason != "skip_no_pedestrian":
+                    if success_flag:
+                        success_log.append(1)
+                    else:
+                        success_log.append(0)   
+                
+                    # ===================== curriculum automatic ============================
+                    if hasattr(self._env, "task") and self._env.task is not None:
+                        if hasattr(self._env.task, "record_episode_result"):
+                            self._env.task.record_episode_result(bool(success_flag))
+                    # =======================================================================
 
-                if success_flag:
-                    success_log.append(1)
                 else:
-                    success_log.append(0)   
+                    print("[TRAINER] skipped episode: no pedestrian spawned")
 
 
                 # success_log.append(1 if success_flag else 0)
@@ -818,7 +829,11 @@ class Trainer:
 
     def evaluate_policy(self, total_steps,plot_map_mode=False):
         # tf.summary.experimental.set_step(total_steps)
-        if self._normalize_obs:
+
+        # if self._normalize_obs:
+        #     self._test_env.normalizer.set_params(*self._env.normalizer.get_params())
+
+        if self._normalize_obs and hasattr(self._env, "normalizer") and hasattr(self._test_env, "normalizer"):
             self._test_env.normalizer.set_params(*self._env.normalizer.get_params())
 
         avg_test_return = 0.
@@ -1009,7 +1024,9 @@ class Trainer:
         # test settings
         parser.add_argument('--evaluate', action='store_true',
                             help='Evaluate trained model')
-        parser.add_argument('--test-interval', type=int, default=int(20e4),
+        # parser.add_argument('--test-interval', type=int, default=int(20e4),
+        #                     help='Interval to evaluate trained model')
+        parser.add_argument('--test-interval', type=int, default=int(300_000),
                             help='Interval to evaluate trained model')
         parser.add_argument('--show-test-progress', action='store_true',
                             help='Call `render` in evaluation process')

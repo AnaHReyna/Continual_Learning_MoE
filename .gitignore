@@ -16,3 +16,8 @@ collect_carla_steering_dataset.py
 train_image_model.py
 train/train_iterations.py
 envs/carla_route_env_old.py
+export_rollouts/datasets
+test/results
+train/lane_keeping
+train/pedestrian
+

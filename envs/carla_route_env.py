@@ -26,22 +26,22 @@ class EnvConfig:
     traffic_manager_port = 8000
     timeout = 120.0
 
-    route_file = "/home/ana/Documents/Architecture_Transformers_SR/envs/routes_Town01_Opt.xml"
+    route_file = "/home/ana/Documents/Architecture_Transformers_SR/envs/routes_Town10HD_Opt.xml"
     route_id = None
-    route_town = "Town01_Opt"
+    route_town = "Town10HD_Opt"
 
     sync = True
     fixed_delta_seconds = 0.05
 
     max_episode_steps = 300
-    target_speed_kmh = 15.0
+    target_speed_kmh = 25.0
     ego_filter = "vehicle.lincoln.mkz_2017"
-    seed = 42
+    seed = 0
 
     render_rgb_camera = False
     front_camera_width = 640
     front_camera_height = 360
-    front_camera_fov = 40
+    front_camera_fov = 70
 
     spectator_follow = False
     spectator_height_m = 25.0
@@ -60,6 +60,8 @@ class EnvConfig:
 
     im_width = 120
     im_height = 160
+
+    spectator_follow = True
 
 
 class CollisionSensor:
@@ -181,6 +183,7 @@ class CarlaRouteEnv(object):
 
         self.blueprint_library = None
         self.sem_cam = None
+        # self.cnn_model = load_model("/home/ana/Documents/Architecture_Transformers_SR/CNN_image_embedding_model.h5", compile=False,)
         self.cnn_model = load_model("/home/ana/Documents/Architecture_Transformers_SR/CNN_image_model.h5", compile=False,)
 
         self.prev_steer = 0.0
@@ -189,6 +192,18 @@ class CarlaRouteEnv(object):
         self._route_xy = None
         self._route_s = None
         self._route_total_length = None
+
+        # debug drawing
+        self.draw_debug_routes = False
+        self.debug_route_z = 0.5
+        self.debug_policy_z = 1.0
+        self.debug_draw_life_time = 0.25
+        self.policy_route_history: List[carla.Location] = []
+
+        self.scenario = None
+        self.scenario_tree = None
+        self.scenario_criteria = []
+
 
 
 ###############################################################################################################################################
@@ -227,6 +242,87 @@ class CarlaRouteEnv(object):
         i = np.array(image.raw_data)
         i = i.reshape((self.im_height, self.im_width, 4))[:, :, :3]  # -> (240,320,3)
         self.image_seg = i
+    # ========================================================================================================
+
+    # -------------------------------
+    # debug drawing
+    # -------------------------------
+    def _dbg_loc(self, loc: carla.Location, z_offset: float) -> carla.Location:
+        return carla.Location(x=loc.x, y=loc.y, z=loc.z + z_offset)
+    
+
+    def _draw_xml_route(self, life_time: float = None):
+        if life_time is None:
+            life_time = self.debug_draw_life_time
+
+        if self.world is None or len(self.route_waypoints) < 2:
+            return
+
+        dbg = self.world.debug
+
+        route_color = carla.Color(0, 255, 0)      # green
+        start_color = carla.Color(0, 0, 255)      # blue
+        end_color = carla.Color(255, 0, 0)        # red
+        dir_color = carla.Color(255, 255, 0)      # yellow
+
+        for i in range(len(self.route_waypoints) - 1):
+            a = self._dbg_loc(self.route_waypoints[i].location, self.debug_route_z)
+            b = self._dbg_loc(self.route_waypoints[i + 1].location, self.debug_route_z)
+            dbg.draw_line(a, b, thickness=0.12, color=route_color, life_time=life_time,)
+
+        start_loc = self._dbg_loc(self.route_waypoints[0].location, self.debug_route_z + 0.3)
+        end_loc = self._dbg_loc(self.route_waypoints[-1].location, self.debug_route_z + 0.3)
+
+        dbg.draw_point(start_loc, size=0.16, color=start_color, life_time=life_time)
+        dbg.draw_point(end_loc, size=0.16, color=end_color, life_time=life_time)
+
+        dbg.draw_string(start_loc + carla.Location(z=0.35),
+                        "START XML",
+                        draw_shadow=False,
+                        color=start_color,
+                        life_time=life_time,
+                        )
+
+        dbg.draw_string(end_loc + carla.Location(z=0.35),
+                        "GOAL XML",
+                        draw_shadow=False,
+                        color=end_color,
+                        life_time=life_time,
+                        )
+
+        step = max(1, len(self.route_waypoints) // 20)
+        for i in range(0, len(self.route_waypoints) - 1, step):
+            a = self._dbg_loc(self.route_waypoints[i].location, self.debug_route_z + 0.15)
+            b = self._dbg_loc(self.route_waypoints[min(i + 1, len(self.route_waypoints) - 1)].location, self.debug_route_z + 0.15)            
+            dbg.draw_arrow(a, b, thickness=0.08, arrow_size=0.18, color=dir_color, life_time=life_time,)
+
+
+    def _reset_policy_route_history(self):
+        self.policy_route_history = []
+        if self.ego is not None:
+            loc = self.ego.get_location()
+            self.policy_route_history.append(carla.Location(x=loc.x, y=loc.y, z=loc.z))
+
+
+    def _draw_policy_route_incremental(self, prev_loc: carla.Location, curr_loc: carla.Location, life_time: float = None):
+        if life_time is None:
+            life_time = self.debug_draw_life_time
+
+        if self.world is None or prev_loc is None or curr_loc is None:
+            return
+
+        dbg = self.world.debug
+        color = carla.Color(255, 0, 255)  # magenta
+
+        a = self._dbg_loc(prev_loc, self.debug_policy_z)
+        b = self._dbg_loc(curr_loc, self.debug_policy_z)
+
+        dbg.draw_line(a, b, thickness=0.10, color=color, life_time=life_time,)
+
+        dbg.draw_point(b, size=0.10, color=color, life_time=life_time,)
+
+    # ============================================================================================================================
+
 
     
     # ---------------------------
@@ -364,6 +460,23 @@ class CarlaRouteEnv(object):
         self.lane_sensor = LaneInvasionSensor(self.ego)
 
 
+    # ====================== Traffic Manager ====================================================
+
+    def _find_nearest_route_index(self, location: carla.Location, window: int = 40) -> int:
+        start = max(0, self.route_index - 5)
+        end = min(len(self.route_waypoints), self.route_index + window)
+
+        best_idx = self.route_index
+        best_dist = float("inf")
+
+        for i in range(start, end):
+            d = self._distance(location, self.route_waypoints[i].location)
+            if d < best_dist:
+                best_dist = d
+                best_idx = i
+
+        return best_idx
+
 
     def _spawn_background_traffic(self):
         assert self.world is not None
@@ -373,87 +486,274 @@ class CarlaRouteEnv(object):
         assert len(self.route_waypoints) > 0
 
         bp_lib = self.world.get_blueprint_library()
-        vehicle_bps = []
+
+        ego_filter = getattr(self.cfg, "ego_filter", "vehicle.lincoln.mkz_2017")
+        preferred_ids = [ego_filter,
+                        "vehicle.lincoln.mkz_2020",
+                        "vehicle.charger_2020",
+                        "vehicle.audi.etron",
+                        "vehicle.tesla.model3",
+                        "vehicle.mercedes.coupe",
+                        "vehicle.audi.a2",
+                        "vehicle.nissan.patrol",
+                        ]
+
+        preferred_bps = []
+        fallback_bps = []
 
         for bp in bp_lib.filter("vehicle.*"):
             if bp.has_attribute("number_of_wheels"):
                 try:
-                    if int(bp.get_attribute("number_of_wheels")) == 4:
-                        vehicle_bps.append(bp)
+                    if int(bp.get_attribute("number_of_wheels")) != 4:
+                        continue
                 except Exception:
-                    pass
+                    continue
 
-        if len(vehicle_bps) == 0:
+            if bp.id in preferred_ids:
+                preferred_bps.append(bp)
+            else:
+                fallback_bps.append(bp)
+
+        preferred_order = {bp_id: i for i, bp_id in enumerate(preferred_ids)}
+        preferred_bps.sort(key=lambda bp: preferred_order.get(bp.id, 999))
+
+        candidate_bps = preferred_bps + fallback_bps
+        if not candidate_bps:
+            print("[TRAFFIC] no vehicle blueprints found")
             return
 
         ego_tf = self.ego.get_transform()
         ego_loc = ego_tf.location
-        ego_forward = ego_tf.get_forward_vector()
-
-        spawn_points = self.map.get_spawn_points()
-        scored_spawn_points = []
 
         current_idx = self._find_nearest_route_index(ego_loc)
-        lookahead_wps = self.route_waypoints[current_idx:min(current_idx + 80, len(self.route_waypoints))]
+        level = getattr(getattr(self, "task", None), "curriculum_level", 0)
 
-        for sp in spawn_points:
-            loc = sp.location
-            d_ego = self._distance(loc, ego_loc)
+        print(
+            f"[TRAFFIC] level={level} requested={self.cfg.num_npc_vehicles} "
+            f"ego=({ego_loc.x:.2f}, {ego_loc.y:.2f}, {ego_loc.z:.2f}) "
+            f"route_idx={current_idx}"
+        )
 
-            if d_ego < 10.0 or d_ego > self.cfg.spawn_radius_m:
+        def _loc_key(loc, precision=1):
+            return (round(loc.x, precision), round(loc.y, precision), round(loc.z, precision))
+
+        def _is_valid_driving_neighbor(base_wp, other_wp):
+            if other_wp is None:
+                return False
+            if other_wp.lane_type != carla.LaneType.Driving:
+                return False
+
+            yaw_a = base_wp.transform.rotation.yaw
+            yaw_b = other_wp.transform.rotation.yaw
+            yaw_diff = abs((yaw_a - yaw_b + 180.0) % 360.0 - 180.0)
+            return yaw_diff <= 45.0
+
+        def _try_spawn_vehicle(tf, source_name):
+            nonlocal failed_spawn_attempts
+
+            for bp in candidate_bps[:8]:
+                try:
+                    if bp.has_attribute("role_name"):
+                        bp.set_attribute("role_name", "autopilot")
+                except Exception:
+                    pass
+
+                actor = self.world.try_spawn_actor(bp, tf)
+                if actor is not None:
+                    actor.set_autopilot(True, self.traffic_manager.get_port())
+                    self.traffic_manager.auto_lane_change(actor, True)
+                    self.traffic_manager.distance_to_leading_vehicle(actor, 3.0)
+                    self.traffic_manager.vehicle_percentage_speed_difference(
+                        actor,
+                        self._rng.randint(-15, 5)
+                    )
+
+                    self.npc_vehicles.append(actor)
+                    self.actor_handles.append(actor)
+
+                    print(
+                        f"[TRAFFIC] SPAWN OK src={source_name} bp={bp.id} "
+                        f"loc=({tf.location.x:.2f},{tf.location.y:.2f},{tf.location.z:.2f})"
+                    )
+                    return True
+                else:
+                    failed_spawn_attempts += 1
+
+            return False
+
+        # --------------------------------------------------
+        # 1) candidatos controlados a partir do waypoint do ego
+        # --------------------------------------------------
+        controlled_candidates = []
+        used_keys = set()
+
+        ego_wp = self.map.get_waypoint(
+            ego_loc,
+            project_to_road=True,
+            lane_type=carla.LaneType.Driving,
+        )
+
+        if ego_wp is not None:
+            # spawn ao longo da própria pista do ego
+            forward_dists = [5.0, 7.0, 9.0]
+
+            for dist in forward_dists:
+                next_wps = ego_wp.next(dist)
+                if not next_wps:
+                    continue
+
+                base_wp = next_wps[0]
+                wp_list = [("ego_lane", base_wp)]
+
+                left_wp = base_wp.get_left_lane()
+                if _is_valid_driving_neighbor(base_wp, left_wp):
+                    wp_list.append(("left_lane", left_wp))
+
+                right_wp = base_wp.get_right_lane()
+                if _is_valid_driving_neighbor(base_wp, right_wp):
+                    wp_list.append(("right_lane", right_wp))
+
+                for source_name, wp in wp_list:
+                    tf = carla.Transform(
+                        carla.Location(
+                            x=wp.transform.location.x,
+                            y=wp.transform.location.y,
+                            z=wp.transform.location.z + 0.30,
+                        ),
+                        wp.transform.rotation,
+                    )
+
+                    k = _loc_key(tf.location)
+                    if k in used_keys:
+                        continue
+                    used_keys.add(k)
+                    controlled_candidates.append((source_name, tf))
+
+            # tenta também um carro um pouco atrás do ego
+            prev_wps = ego_wp.previous(6.0)
+            if prev_wps:
+                back_wp = prev_wps[0]
+                tf = carla.Transform(
+                    carla.Location(
+                        x=back_wp.transform.location.x,
+                        y=back_wp.transform.location.y,
+                        z=back_wp.transform.location.z + 0.30,
+                    ),
+                    back_wp.transform.rotation,
+                )
+
+                k = _loc_key(tf.location)
+                if k not in used_keys:
+                    used_keys.add(k)
+                    controlled_candidates.append(("behind_ego", tf))
+
+        # --------------------------------------------------
+        # 2) candidatos adicionais pela rota à frente
+        # --------------------------------------------------
+        route_start = max(0, current_idx + 5)
+        route_end = min(len(self.route_waypoints), current_idx + 35)
+        route_step = 5
+
+        for ridx in range(route_start, route_end, route_step):
+            base_tf = self.route_waypoints[ridx]
+
+            try:
+                base_wp = self.map.get_waypoint(
+                    base_tf.location,
+                    project_to_road=True,
+                    lane_type=carla.LaneType.Driving,
+                )
+            except Exception:
+                base_wp = None
+
+            if base_wp is None:
                 continue
 
-            rel_x = loc.x - ego_loc.x
-            rel_y = loc.y - ego_loc.y
-            dot = rel_x * ego_forward.x + rel_y * ego_forward.y
-            if dot < -5.0:
-                continue
+            wp_list = [("route_main", base_wp)]
 
-            min_route_dist = float("inf")
-            best_route_idx = current_idx
+            left_wp = base_wp.get_left_lane()
+            if _is_valid_driving_neighbor(base_wp, left_wp):
+                wp_list.append(("route_side", left_wp))
 
-            for i, wp in enumerate(lookahead_wps, start=current_idx):
-                d_route = self._distance(loc, wp.location)
-                if d_route < min_route_dist:
-                    min_route_dist = d_route
-                    best_route_idx = i
+            right_wp = base_wp.get_right_lane()
+            if _is_valid_driving_neighbor(base_wp, right_wp):
+                wp_list.append(("route_side", right_wp))
 
-            if min_route_dist > 8.0:
-                continue
+            for source_name, wp in wp_list:
+                tf = carla.Transform(
+                    carla.Location(
+                        x=wp.transform.location.x,
+                        y=wp.transform.location.y,
+                        z=wp.transform.location.z + 0.30,
+                    ),
+                    wp.transform.rotation,
+                )
 
-            score = min_route_dist + 0.05 * d_ego - 0.02 * dot
-            scored_spawn_points.append((score, best_route_idx, sp))
+                k = _loc_key(tf.location)
+                if k in used_keys:
+                    continue
+                used_keys.add(k)
+                controlled_candidates.append((source_name, tf))
 
-        scored_spawn_points.sort(key=lambda x: x[0])
+        print(f"[TRAFFIC] controlled_candidates={len(controlled_candidates)}")
 
-        used_route_indices = []
+        failed_spawn_attempts = 0
         spawned = 0
 
-        for _, route_idx, sp in scored_spawn_points:
+        # --------------------------------------------------
+        # 3) primeiro tenta os candidatos controlados
+        # --------------------------------------------------
+        for source_name, tf in controlled_candidates:
             if spawned >= self.cfg.num_npc_vehicles:
                 break
-            if any(abs(route_idx - used_idx) < 8 for used_idx in used_route_indices):
+
+            d = self._distance(tf.location, ego_loc)
+
+            # agora permite vizinhos mais próximos
+            if d < 4.5 or d > 25.0:
                 continue
 
-            bp = self._rng.choice(vehicle_bps)
-            if bp.has_attribute("role_name"):
-                bp.set_attribute("role_name", "autopilot")
+            if _try_spawn_vehicle(tf, source_name):
+                spawned += 1
 
-            actor = self.world.try_spawn_actor(bp, sp)
-            if actor is None:
-                continue
+        # --------------------------------------------------
+        # 4) fallback com spawn points do mapa
+        # --------------------------------------------------
+        if spawned < self.cfg.num_npc_vehicles:
+            map_candidates = []
 
-            actor.set_autopilot(True, self.traffic_manager.get_port())
-            self.traffic_manager.auto_lane_change(actor, True)
-            self.traffic_manager.distance_to_leading_vehicle(actor, 5.0)
-            self.traffic_manager.vehicle_percentage_speed_difference(
-                actor, self._rng.randint(-30, 5)
+            for sp in self.map.get_spawn_points():
+                k = _loc_key(sp.location)
+                if k in used_keys:
+                    continue
+
+                d = self._distance(sp.location, ego_loc)
+                if d < 8.0 or d > 50.0:
+                    continue
+
+                map_candidates.append(sp)
+
+            map_candidates = sorted(
+                map_candidates,
+                key=lambda sp: self._distance(sp.location, ego_loc)
             )
 
-            self.npc_vehicles.append(actor)
-            self.actor_handles.append(actor)
-            used_route_indices.append(route_idx)
-            spawned += 1
+            print(f"[TRAFFIC] fallback_map_candidates={len(map_candidates)}")
+
+            for sp in map_candidates:
+                if spawned >= self.cfg.num_npc_vehicles:
+                    break
+
+                if _try_spawn_vehicle(sp, "map_spawn"):
+                    spawned += 1
+
+        print(
+            f"[TRAFFIC] DONE requested={self.cfg.num_npc_vehicles} "
+            f"spawned={spawned} alive={len([v for v in self.npc_vehicles if v.is_alive])} "
+            f"failed_spawn_attempts={failed_spawn_attempts}"
+        )
+    
+    # ==============================================================================================================
 
 
     # ---------------------------
@@ -628,13 +928,13 @@ class CarlaRouteEnv(object):
             if d <= self.cfg.nearby_npc_radius_m:
                 candidates.append(("vehicle", actor, d))
 
-        # if self.scenario is not None and hasattr(self.scenario, "other_actors"):
-        #     for actor in self.scenario.other_actors:
-        #         if actor is None or not actor.is_alive:
-        #             continue
-        #         d = self._distance(actor.get_location(), ego_loc)
-        #         if d <= self.cfg.nearby_npc_radius_m:
-        #             candidates.append(("scenario", actor, d))
+        if self.scenario is not None and hasattr(self.scenario, "other_actors"):
+            for actor in self.scenario.other_actors:
+                if actor is None or not actor.is_alive:
+                    continue
+                d = self._distance(actor.get_location(), ego_loc)
+                if d <= self.cfg.nearby_npc_radius_m:
+                    candidates.append(("scenario", actor, d))
 
         candidates.sort(key=lambda x: x[2])
         return candidates[:self.cfg.max_neighbors]
@@ -838,14 +1138,15 @@ class CarlaRouteEnv(object):
         #     self.bev_camera.destroy()
         #     self.bev_camera = None
 
-        # if self.scenario is not None:
-        #     try:
-        #         self.scenario.remove_all_actors()
-        #     except Exception:
-        #         pass
-        #     self.scenario = None
-        #     self.scenario_tree = None
-        #     self.scenario_criteria = []
+        if self.scenario is not None:
+            try:
+                self.scenario.remove_all_actors()
+            except Exception:
+                pass
+            self.scenario = None
+
+        self.scenario_tree = None
+        self.scenario_criteria = []
 
         for actor in list(self.actor_handles):
             try:
@@ -887,13 +1188,20 @@ class CarlaRouteEnv(object):
         lateral_error, heading_error, progress, dist_to_goal = self._compute_route_errors()
         speed_kmh = self._kmh(self.ego.get_velocity())
 
+        # nearest_vehicle_dist, nearest_vehicle_rel_speed, nearest_vehicle_ttc = self._get_nearest_vehicle_metrics()
+        lead_vehicle_dist, lead_vehicle_rel_speed, lead_vehicle_ttc = self._get_lead_vehicle_metrics()
+
+        pedestrian_dist, pedestrian_active, pedestrian_to_conflict_dist = self._get_pedestrian_metrics()
+
         if dist_to_goal < 5.0 or progress >= 0.995:
             route_finish = True
         else:
             route_finish = False
 
 
-        if abs(lateral_error) > 2.0:
+        # if abs(lateral_error) > 2.0:
+        #     off_route = True
+        if abs(lateral_error) > 2.5:
             off_route = True
         else:
             off_route = False
@@ -936,11 +1244,41 @@ class CarlaRouteEnv(object):
                 "speed_kmh": speed_kmh,
                 "lateral_improvement": lateral_improvement,
                 "route_index": self.route_index,
+
+                # "nearest_vehicle_dist": nearest_vehicle_dist,
+                # "nearest_vehicle_rel_speed": nearest_vehicle_rel_speed,
+                # "nearest_vehicle_ttc": nearest_vehicle_ttc,
+
+                "lead_vehicle_dist": lead_vehicle_dist,
+                "lead_vehicle_rel_speed": lead_vehicle_rel_speed,
+                "lead_vehicle_ttc": lead_vehicle_ttc,
+
+                "pedestrian_dist": pedestrian_dist,
+                "pedestrian_active": pedestrian_active,
+                "pedestrian_to_conflict_dist": pedestrian_to_conflict_dist,
                 }
+    
+    
+
+    def _update_spectator(self):
+        if not self.cfg.spectator_follow or self.ego is None or self.world is None:
+            return
+
+        spectator = self.world.get_spectator()
+        ego_tf = self.ego.get_transform()
+        ego_loc = ego_tf.location
+        yaw = ego_tf.rotation.yaw if self.cfg.spectator_rotate_with_ego else 0.0
+
+        spec_tf = carla.Transform(carla.Location(x=ego_loc.x, y=ego_loc.y, z=self.cfg.spectator_height_m),
+                                  carla.Rotation(pitch=-90.0, yaw=yaw, roll=0.0),
+                                  )
+        
+        spectator.set_transform(spec_tf)
     
 
 
     def reset(self, *, seed=None, options=None):
+        self.skip_episode = False
         if seed is not None:
             self._rng.seed(seed)
             np.random.seed(seed)
@@ -961,11 +1299,13 @@ class CarlaRouteEnv(object):
         self.stuck_steps = 0
         self.image_seg = None
         self.image_for_CNN = None
+        self._obs_debug_counter = 0
 
         self._choose_route()
         target_town = self.route_config.town
 
         self._cleanup_actors()
+        self._reset_policy_route_history()
 
         if self.world is None:
             need_load_world = True
@@ -988,11 +1328,12 @@ class CarlaRouteEnv(object):
         self._prepare_route()
         self._spawn_ego()
 
+        if self.task is not None:
+            self.task.on_reset(self)
+
         if self.cfg.num_npc_vehicles > 0:
             self._spawn_background_traffic()
 
-        if self.task is not None:
-            self.task.on_reset(self)
 
         self._destroy_sensor_seg()
 
@@ -1011,6 +1352,7 @@ class CarlaRouteEnv(object):
         self.sensor_seg.listen(lambda data: self.process_img(data))
 
         self._warmup_ticks()
+        self._update_spectator()
 
         if self.collision_sensor:
             self.collision_sensor.clear()
@@ -1026,6 +1368,9 @@ class CarlaRouteEnv(object):
         self.prev_dist_to_goal = dist_to_goal
         self.prev_lateral_error = lateral_error
 
+        if self.draw_debug_routes:
+            self._draw_xml_route(life_time=1.0)
+
         obs = self._get_structured_obs()
 
         if self.image_seg is not None:
@@ -1039,16 +1384,21 @@ class CarlaRouteEnv(object):
 
     def step(self, action):
         action = np.asarray(action, dtype=np.float32)
-
+        
+        prev_loc = self.ego.get_location()
+        
         target_speed_kmh, rl_steer = self.action_adapter(action)
         self.target_speed = float(target_speed_kmh)
 
         throttle_cmd, brake_cmd = self._speed_control(self.target_speed)
 
         old_prev_steer = self.prev_steer
-        max_delta = 0.08
+        # max_delta = 0.08
+        # steer_cmd = float(np.clip(rl_steer, old_prev_steer - max_delta, old_prev_steer + max_delta))
+        # steer_cmd = float(np.clip(steer_cmd, -0.45, 0.45))
+        max_delta = 0.04
         steer_cmd = float(np.clip(rl_steer, old_prev_steer - max_delta, old_prev_steer + max_delta))
-        steer_cmd = float(np.clip(steer_cmd, -0.45, 0.45))
+        steer_cmd = float(np.clip(steer_cmd, -0.25, 0.25))
         self.prev_steer = steer_cmd
 
         control = carla.VehicleControl(throttle=float(throttle_cmd),
@@ -1063,6 +1413,16 @@ class CarlaRouteEnv(object):
         self.world.tick()
         self.step_count += 1
 
+
+        curr_loc = self.ego.get_location()
+
+        if self.draw_debug_routes:
+            self.policy_route_history.append(carla.Location(x=curr_loc.x, y=curr_loc.y, z=curr_loc.z))
+            self._draw_policy_route_incremental(prev_loc, curr_loc, life_time=0.25)
+
+
+        self._update_spectator()
+
         if self.task is not None:
             self.task.after_tick(self)
 
@@ -1070,12 +1430,12 @@ class CarlaRouteEnv(object):
 
         if self.image_seg is not None:
             self.image_for_CNN = self.apply_cnn(self.image_seg[:, :])
+            # print('======= ANA =======', self.image_for_CNN)
         else:
             self.image_for_CNN = np.zeros(280, dtype=np.float32)
 
         base_info = self._build_base_info()
-        base_info.update(
-                         {"vision": self.image_for_CNN,
+        base_info.update({"vision": self.image_for_CNN,
                           "target_speed_kmh": self.target_speed,
                           "control_steer": steer_cmd,
                           "rl_steer": float(rl_steer),
@@ -1096,3 +1456,161 @@ class CarlaRouteEnv(object):
         info["reward"] = reward
 
         return obs, reward, done, info
+    
+# ============================== methods for tasks =============================================== #
+
+    # def _get_nearest_vehicle_metrics(self):
+    #    """
+    #    Returns:
+    #    nearest_dist: Euclidean distance to the nearest vehicle
+    #    rel_speed: closing speed (positive = approaching vehicle)
+    #    ttc: approximate time-to-collision
+    #    """
+    #    if self.ego is None:
+    #        return float("inf"), 0.0, float("inf")
+
+    #    ego_tf = self.ego.get_transform()
+    #    ego_loc = ego_tf.location
+    #    ego_vel = self.ego.get_velocity()
+
+    #    ego_speed = self._kmh(ego_vel) / 3.6  # m/s
+
+    #    nearest_dist = float("inf")
+    #    nearest_rel_speed = 0.0
+
+    #    for actor in self.npc_vehicles:
+    #        if actor is None or not actor.is_alive:
+    #            continue
+
+    #        other_loc = actor.get_location()
+    #        dist = self._distance(ego_loc, other_loc)
+
+    #        if dist < nearest_dist:
+    #            other_vel = actor.get_velocity()
+    #            other_speed = self._kmh(other_vel) / 3.6  # m/s
+
+    #            # Simple approach: if the ego is faster, there is closure.
+    #            rel_speed = max(ego_speed - other_speed, 0.0)
+
+    #            nearest_dist = dist
+    #            nearest_rel_speed = rel_speed
+
+    #    if nearest_dist == float("inf"):
+    #        return float("inf"), 0.0, float("inf")
+
+    #    if nearest_rel_speed > 1e-3:
+    #        ttc = nearest_dist / nearest_rel_speed
+    #    else:
+    #        ttc = float("inf")
+
+    #    return nearest_dist, nearest_rel_speed, ttc
+    
+    
+
+    def _get_lead_vehicle_metrics(self):
+        """
+        Considera apenas veículos relevantes à frente do ego.
+        Retorna:
+            lead_dist
+            lead_rel_speed
+            lead_ttc
+        """
+        if self.ego is None:
+            return float("inf"), 0.0, float("inf")
+
+        ego_tf = self.ego.get_transform()
+        ego_loc = ego_tf.location
+        ego_yaw = math.radians(ego_tf.rotation.yaw)
+        ego_vel = self.ego.get_velocity()
+
+        ego_speed = self._kmh(ego_vel) / 3.6  # m/s
+
+        c = math.cos(ego_yaw)
+        s = math.sin(ego_yaw)
+
+        best_longitudinal = float("inf")
+        lead_rel_speed = 0.0
+
+        for actor in self.npc_vehicles:
+            if actor is None or not actor.is_alive:
+                continue
+
+            other_tf = actor.get_transform()
+            other_loc = other_tf.location
+            other_yaw = math.radians(other_tf.rotation.yaw)
+
+            dx = float(other_loc.x - ego_loc.x)
+            dy = float(other_loc.y - ego_loc.y)
+
+            # coordenadas no frame do ego
+            x_local = c * dx + s * dy
+            y_local = -s * dx + c * dy
+
+            # só veículos à frente
+            if x_local <= 0.0:
+                continue
+
+            # só veículos no corredor da frente (aprox mesma faixa / faixa vizinha próxima)
+            if abs(y_local) > 3.0:
+                continue
+
+            # mesma direção aproximada
+            yaw_diff = (other_yaw - ego_yaw + math.pi) % (2 * math.pi) - math.pi
+            if abs(yaw_diff) > math.radians(35.0):
+                continue
+
+            if x_local < best_longitudinal:
+                other_vel = actor.get_velocity()
+                other_speed = self._kmh(other_vel) / 3.6
+                rel_speed = max(ego_speed - other_speed, 0.0)
+
+                best_longitudinal = x_local
+                lead_rel_speed = rel_speed
+
+        if best_longitudinal == float("inf"):
+            return float("inf"), 0.0, float("inf")
+
+        if lead_rel_speed > 1e-3:
+            lead_ttc = best_longitudinal / lead_rel_speed
+        else:
+            lead_ttc = float("inf")
+
+        return best_longitudinal, lead_rel_speed, lead_ttc
+    
+
+    def _get_pedestrian_metrics(self):
+        if self.ego is None or self.scenario is None or not hasattr(self.scenario, "other_actors"):
+            return float("inf"), False, float("inf")
+
+        ego_loc = self.ego.get_location()
+        min_dist = float("inf")
+        ped_active = False
+        min_conflict_dist = float("inf")
+
+        conflict_loc = None
+        if hasattr(self.scenario, "_collision_wp") and self.scenario._collision_wp is not None:
+            conflict_loc = self.scenario._collision_wp.transform.location
+
+        for actor in self.scenario.other_actors:
+            if actor is None or not actor.is_alive:
+                continue
+
+            loc = actor.get_location()
+            if loc is None:
+                continue
+
+            d = self._distance(ego_loc, loc)
+            if d < min_dist:
+                min_dist = d
+
+            vel = actor.get_velocity()
+            speed = math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
+            if speed > 0.2:
+                ped_active = True
+
+            if conflict_loc is not None:
+                cdist = self._distance(loc, conflict_loc)
+                if cdist < min_conflict_dist:
+                    min_conflict_dist = cdist
+
+        return min_dist, ped_active, min_conflict_dist

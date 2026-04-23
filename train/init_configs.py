@@ -8,9 +8,9 @@ def get_argument(parser=None):
     if parser is None:
         parser = argparse.ArgumentParser(conflict_handler='resolve')
     # experiment settings
-    parser.add_argument('--max-steps', type=int, default=100_000,
+    parser.add_argument('--max-steps', type=int, default=150_000,
                         help='Maximum number steps to interact with env.')
-    parser.add_argument('--episode-max-steps', type=int, default=int(1e3),
+    parser.add_argument('--episode-max-steps', type=int, default=int(2500),
                         help='Maximum steps in an episode')
     parser.add_argument('--n-experiments', type=int, default=3,
                         help='Number of experiments')
@@ -32,11 +32,11 @@ def get_argument(parser=None):
     # test settings
     parser.add_argument('--evaluate', action='store_true',
                         help='Evaluate trained model')
-    parser.add_argument('--test-interval', type=int, default=int(20e4),
+    parser.add_argument('--test-interval', type=int, default=int(300_000),
                         help='Interval to evaluate trained model')
     parser.add_argument('--show-test-progress', action='store_true',
                         help='Call `render` in evaluation process')
-    parser.add_argument('--test-episodes', type=int, default=20,
+    parser.add_argument('--test-episodes', type=int, default=100,
                         help='Number of episodes to evaluate at once')
     parser.add_argument('--save-test-path', action='store_true',
                         help='Save trajectories of evaluation')
@@ -57,7 +57,8 @@ def get_argument(parser=None):
                         default='INFO', help='Logging level')
     parser.add_argument('--scenario', choices=['left_turn', 'cross', 'carla', 'roundabout',
                         'roundabout_easy', 'roundabout_medium'], default='carla')
-    parser.add_argument('--algo',choices=['scene_rep', 'drq', 'ppo', 'dt', 'rb'], default='scene_rep')
+    # parser.add_argument('--algo',choices=['scene_rep', 'drq', 'ppo', 'dt', 'rb'], default='scene_rep')
+    parser.add_argument('--algo',choices=['SAC', 'drq', 'ppo', 'dt', 'rb'], default='SAC')
 
     #state settings     
     parser.add_argument('--N-steps', type=int, default=10, help='Number of history steps for logging, 3 for image and 10 for vector')
@@ -75,6 +76,9 @@ def get_argument(parser=None):
 
     # runner settings
     parser.add_argument('--skip-timestep', type=int, default=3, help='time step interval for actions')
+
+    parser.add_argument("--task", type=str, default="lane_keeping")
+    parser.add_argument("--level", type=int, default=0)
     return parser
 
 
@@ -110,7 +114,7 @@ def set_off_policy_configs(args, test=False):
                         'no_neighbor_fut':False,
                         'carla': (scenario =='carla'),
                         'units': 128, 
-                        'use_vision': True,
+                        'use_vision':True,
                         'vision_dim': 280
                         }
 

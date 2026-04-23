@@ -329,6 +329,9 @@ class CollisionTest(Criterion):
             new_status = py_trees.common.Status.FAILURE
 
         actor_location = CarlaDataProvider.get_location(self.actor)
+        if actor_location is None:
+            return new_status
+        
         new_registered_collisions = []
 
         # Loops through all the previous registered collisions
@@ -351,15 +354,30 @@ class CollisionTest(Criterion):
 
         return new_status
 
+    # def terminate(self, new_status):
+    #     """
+    #     Cleanup sensor
+    #     """
+    #     if self._collision_sensor is not None:
+    #         self._collision_sensor.destroy()
+    #     self._collision_sensor = None
+
+    #     super(CollisionTest, self).terminate(new_status)
+
     def terminate(self, new_status):
-        """
-        Cleanup sensor
-        """
         if self._collision_sensor is not None:
-            self._collision_sensor.destroy()
+            try:
+                self._collision_sensor.stop()
+            except Exception:
+                pass
+            try:
+                self._collision_sensor.destroy()
+            except Exception:
+                pass
         self._collision_sensor = None
 
         super(CollisionTest, self).terminate(new_status)
+
 
     @staticmethod
     def _count_collisions(weak_self, event):     # pylint: disable=too-many-return-statements
@@ -371,6 +389,8 @@ class CollisionTest(Criterion):
             return
 
         actor_location = CarlaDataProvider.get_location(self.actor)
+        if actor_location is None:
+            return
 
         # Ignore the current one if it is the same id as before
         if self.last_id == event.other_actor.id:

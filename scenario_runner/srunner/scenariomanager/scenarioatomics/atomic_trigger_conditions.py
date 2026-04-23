@@ -1089,20 +1089,40 @@ class DriveDistance(AtomicCondition):
         self._location = CarlaDataProvider.get_location(self._actor)
         super(DriveDistance, self).initialise()
 
+    # def update(self):
+    #     """
+    #     Check driven distance
+    #     """
+    #     new_status = py_trees.common.Status.RUNNING
+
+    #     new_location = CarlaDataProvider.get_location(self._actor)
+    #     self._distance += calculate_distance(self._location, new_location)
+    #     self._location = new_location
+
+    #     if self._distance > self._target_distance:
+    #         new_status = py_trees.common.Status.SUCCESS
+
+    #     self.logger.debug("%s.update()[%s->%s]" % (self.__class__.__name__, self.status, new_status))
+    #     return new_status
+    
+
     def update(self):
-        """
-        Check driven distance
-        """
         new_status = py_trees.common.Status.RUNNING
 
         new_location = CarlaDataProvider.get_location(self._actor)
+        if new_location is None:
+            return new_status
+
+        if self._location is None:
+            self._location = new_location
+            return new_status
+
         self._distance += calculate_distance(self._location, new_location)
         self._location = new_location
 
         if self._distance > self._target_distance:
             new_status = py_trees.common.Status.SUCCESS
 
-        self.logger.debug("%s.update()[%s->%s]" % (self.__class__.__name__, self.status, new_status))
         return new_status
 
 
