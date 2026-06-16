@@ -27,27 +27,28 @@ class LaneKeepingTask:
         self.recent_success = deque(maxlen=window_size)
         self.episodes_since_change = 0
 
+
     def _apply_curriculum(self, env):
         """
         Define the difficulty of the current episode.
         """
         if self.curriculum_level == 0:
             env.cfg.num_npc_vehicles = 0
-            env.cfg.target_speed_kmh = 12.0
+            env.cfg.target_speed_kmh = 25.0
 
         elif self.curriculum_level == 1:
-            env.cfg.num_npc_vehicles = 4
-            env.cfg.target_speed_kmh = 15.0
+            env.cfg.num_npc_vehicles = 1
+            env.cfg.target_speed_kmh = 25.0
 
 
         elif self.curriculum_level == 2:
-            env.cfg.num_npc_vehicles = 6
-            env.cfg.target_speed_kmh = 18.0
+            env.cfg.num_npc_vehicles = 2
+            env.cfg.target_speed_kmh = 30.0
 
 
         else:
-            env.cfg.num_npc_vehicles = 8
-            env.cfg.target_speed_kmh = 22.0
+            env.cfg.num_npc_vehicles = 6
+            env.cfg.target_speed_kmh = 50.0
 
 
         print(f"[TASK] level={self.curriculum_level} "
@@ -63,16 +64,16 @@ class LaneKeepingTask:
         # remains consistent with the current curriculum.
         if self.curriculum_level == 0:
             cfg.num_npc_vehicles = 0
-            cfg.target_speed_kmh = 12.0
+            cfg.target_speed_kmh = 20.0
         elif self.curriculum_level == 1:
             cfg.num_npc_vehicles = 2
-            cfg.target_speed_kmh = 15.0
+            cfg.target_speed_kmh = 30.0
         elif self.curriculum_level == 2:
             cfg.num_npc_vehicles = 4
-            cfg.target_speed_kmh = 18.0
+            cfg.target_speed_kmh = 40.0
         else:
             cfg.num_npc_vehicles = 6
-            cfg.target_speed_kmh = 22.0
+            cfg.target_speed_kmh = 50.0
         return cfg
 
     def on_reset(self, env):

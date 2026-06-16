@@ -8,9 +8,11 @@ from srunner.scenarios.pedestrian_crossing import PedestrianCrossing
 
 
 class PedestrianScenarioConfig:
-    def __init__(self, trigger_point, route):
+    def __init__(self, trigger_point, route, target_speed_kmh):
+
         self.trigger_points = [trigger_point]
         self.route = route
+        self.target_speed_kmh = target_speed_kmh
         self.name = "PedestrianCrossing"
         self.town = None
         self.weather = carla.WeatherParameters().ClearNoon
@@ -22,7 +24,8 @@ class PedestrianTask:
 
     def __init__(self,
                  curriculum_level=0,
-                 auto_curriculum=True,
+                 auto_curriculum=True, # for train
+                 # auto_curriculum=False, # for eval
                  max_level=3,
                  window_size=50,
                  promote_threshold=0.75,
@@ -56,22 +59,23 @@ class PedestrianTask:
     
         if self.curriculum_level == 0:
             env.cfg.num_npc_vehicles = 0
-            env.cfg.target_speed_kmh = 12.0
+            env.cfg.target_speed_kmh = 25.0
             self.trigger_range = (0.05, 0.12)
 
         elif self.curriculum_level == 1:
             env.cfg.num_npc_vehicles = 1
-            env.cfg.target_speed_kmh = 13.0
+            env.cfg.target_speed_kmh = 30.0
             self.trigger_range = (0.05, 0.13)
 
         elif self.curriculum_level == 2:
             env.cfg.num_npc_vehicles = 2
-            env.cfg.target_speed_kmh = 15.0
+            env.cfg.target_speed_kmh = 40.0
             self.trigger_range = (0.06, 0.15)
 
         else:
-            env.cfg.num_npc_vehicles = 2
-            env.cfg.target_speed_kmh = 17.0
+            env.cfg.num_npc_vehicles = 1
+            env.cfg.target_speed_kmh = 30.0
+            # env.cfg.target_speed_kmh = 30.0
             self.trigger_range = (0.08, 0.18)
 
         print(f"[TASK] level={self.curriculum_level} "
@@ -84,16 +88,16 @@ class PedestrianTask:
     def configure_env(self, cfg):
         if self.curriculum_level == 0:
             cfg.num_npc_vehicles = 0
-            cfg.target_speed_kmh = 10.0
+            cfg.target_speed_kmh = 20.0
         elif self.curriculum_level == 1:
-            cfg.num_npc_vehicles = 2
-            cfg.target_speed_kmh = 12.0
+            cfg.num_npc_vehicles = 1
+            cfg.target_speed_kmh = 30.0
         elif self.curriculum_level == 2:
             cfg.num_npc_vehicles = 3
-            cfg.target_speed_kmh = 15.0
+            cfg.target_speed_kmh = 40.0
         else:
             cfg.num_npc_vehicles = 4
-            cfg.target_speed_kmh = 18.0
+            cfg.target_speed_kmh = 50.0
         return cfg
 
 
@@ -190,6 +194,30 @@ class PedestrianTask:
         env.scenario_tree = None
         env.scenario_criteria = []
         env.skip_episode = False
+        env.skip_reason = None
+
+        # =====================================================
+        # PULAR ROTAS CURTAS
+        # =====================================================
+        route_len = getattr(env, "_route_total_length", None)
+
+        if route_len is None:
+            try:
+                env._ensure_route_cache()
+                route_len = env._route_total_length
+            except Exception:
+                route_len = None
+
+        if route_len is not None and route_len < 58.0:
+            print("[PedestrianTask] skipping short route:",
+                  "route=", getattr(env, "route_name", "unknown"),
+                  "id=", getattr(env, "route_id", "unknown"),
+                  "length=", route_len,
+                )
+
+            env.skip_episode = True
+            env.skip_reason = "skip_short_route"
+            return
 
         max_attempts = 1
 
@@ -199,7 +227,10 @@ class PedestrianTask:
             idx = max(1, min(idx, len(env.route_waypoints) - 1))
             trigger_point = env.route_waypoints[idx]
 
-            config = PedestrianScenarioConfig(trigger_point=trigger_point, route=env.route_dense,)
+            config = PedestrianScenarioConfig(trigger_point=trigger_point, 
+                                              route=env.route_dense, 
+                                              target_speed_kmh=env.cfg.target_speed_kmh,
+                                              )
 
             scenario = PedestrianCrossing(world=env.world,
                                           ego_vehicles=[env.ego],
@@ -208,6 +239,8 @@ class PedestrianTask:
                                           criteria_enable=True,
                                           timeout=60,
                                          )
+            
+            # distancia = trigger_point - scenario.delta_dist
 
             num_peds = len(getattr(scenario, "other_actors", []))
             print(f"[PedestrianTask] attempt {attempt + 1}/{max_attempts} -> pedestrians={num_peds}")
@@ -223,14 +256,16 @@ class PedestrianTask:
             except Exception:
                 pass
 
-        print("[PedestrianTask] WARNING: no pedestrians spawned, skipping this episode")
-        env.skip_episode = True
+        # print("[PedestrianTask] WARNING: no pedestrians spawned, skipping this episode")
+        # env.skip_episode = True
 
-        # se desejo treinar sem pedestres 
-        # env.skip_episode = False
-        # env.scenario = None
-        # env.scenario_tree = None
-        # env.scenario_criteria = []
+
+        print("[PedestrianTask] WARNING: no pedestrians spawned, continuing without pedestrian")
+        env.skip_episode = False
+        env.skip_reason = None
+        env.scenario = None
+        env.scenario_tree = None
+        env.scenario_criteria = []
 
 
     def record_episode_result(self, success):
@@ -287,7 +322,8 @@ class PedestrianTask:
             task_info = {"finish": False,
                          "scenario_success": False,
                          "scenario_failure": False,
-                         "done_reason": "skip_no_pedestrian",
+                         # "done_reason": "skip_no_pedestrian",
+                         "done_reason": getattr(env, "skip_reason", "skip_no_pedestrian"),
                          "task_name": self.name,
                          "skip_episode": True,
                         }
@@ -320,17 +356,17 @@ class PedestrianTask:
         reward = 0.0
 
         # basic driving
-        # reward += 2.0 * info["progress_delta"]
-        # reward += 0.02 * info["dist_delta"]
-        reward += 1.2 * info["progress_delta"]
-        reward += 0.01 * info["dist_delta"]
+        reward += 3.0 * info["progress_delta"]
+        reward += 0.03 * info["dist_delta"]
+        # reward += 1.2 * info["progress_delta"]
+        # reward += 0.01 * info["dist_delta"]
         reward -= 0.04 * abs(info["lateral_error"])
         reward -= 0.015 * abs(info["heading_error"])
-        reward += 0.05 * info["lateral_improvement"]
+        reward += 0.08 * info["lateral_improvement"]
         # reward -= 0.03 * abs(info["control_steer"]) 
         # reward -= 0.08 * info["steer_delta"]
-        reward -= 0.08 * abs(info["control_steer"])
-        reward -= 0.30 * info["steer_delta"]
+        reward -= 0.02 * abs(info["control_steer"])
+        reward -= 0.06 * info["steer_delta"]
 
         if abs(info["control_steer"]) > 0.25:
             reward -= 0.15 * (abs(info["control_steer"]) - 0.25)
