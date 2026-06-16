@@ -60,3 +60,13 @@ test_CARLA/Resultados_smoke/
 # Generated graphics
 test_CARLA/graphics/**/figures/
 test_CARLA/graphics/**/archive/
+
+# Full generated training/evaluation outputs
+results/
+teacher_task_encoder_ckpts/
+teacher_task_encoder_ckpts_stage2/
+teacher_task_prototypes/
+teacher_task_prototypes_stage2/
+test_CARLA/Resultados/
+test_CARLA/Resultados_reproduced/
+test_CARLA/Resultados_smoke/
