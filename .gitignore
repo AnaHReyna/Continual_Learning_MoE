@@ -40,3 +40,6 @@ Teacher/train/tasks/
 export_rollouts/datasets/*
 
 !export_rollouts/datasets/export_rollouts.py
+
+# Required CNN model for CARLA image encoder
+!Teacher/envs/train_CNN_image/CNN_image_model.h5
