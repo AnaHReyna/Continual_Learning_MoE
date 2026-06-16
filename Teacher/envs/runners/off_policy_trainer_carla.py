@@ -90,12 +90,15 @@ class Trainer:
             assert isinstance(env.observation_space, Box)
             self._obs_normalizer = EmpiricalNormalizer(shape=env.observation_space.shape)
         # prepare log directory
-        self._output_dir = prepare_output_dir(
-            args=args, user_specified_dir=self._logdir,
-            suffix="{}_{}".format(self._policy.policy_name, args.dir_suffix))
+        self._output_dir = prepare_output_dir(args=args, 
+                                              user_specified_dir=self._logdir,
+                                              suffix="{}_{}".format(self._policy.policy_name, 
+                                              args.dir_suffix)
+                                              )
+
 
         self.logger = initialize_logger(logging_level=logging.getLevelName(args.logging_level),
-                                        output_dir=self._output_dir)
+                                                output_dir=self._output_dir)
 
 
         # if evaluate the model
@@ -117,7 +120,7 @@ class Trainer:
             print('use_ego neighbor maps')
           
 
-        # if args.evaluate:   # Não precisa disso
+        # if args.evaluate:   
             # assert args.model_dir is not None
             # if args.model_dir is None:
                 # raise AssertionError
@@ -131,6 +134,17 @@ class Trainer:
         # prepare TensorBoard output
         self.train_logdir = os.path.join(self._output_dir, "tb", "train")
         self.eval_root    = self._run_dir_from_model_dir(args.model_dir)  # avaliações devem ir para a pasta do experimento (a do ckpt, se for prefixo)
+
+
+        self.eval_rollout_dir = None
+        if self._save_eval_rollouts:
+            if self._eval_rollout_dir is not None:
+                self.eval_rollout_dir = self._eval_rollout_dir
+            else:
+                self.eval_rollout_dir = os.path.join(self.eval_root, "eval_rollouts")
+            os.makedirs(self.eval_rollout_dir, exist_ok=True)
+
+
         self.eval_logdir  = os.path.join(self.eval_root, "tb", "eval")
 
         self.tb_train = tf.summary.create_file_writer(self.train_logdir)
@@ -489,7 +503,8 @@ class Trainer:
 
                 # print(f"[TRAINER-DEBUG] success_flag={success_flag} info={info}")
                 
-                if done_reason != "skip_no_pedestrian":
+                # if done_reason != "skip_no_pedestrian":
+                if done_reason not in ["skip_no_pedestrian", "skip_short_route", "skip_invalid_lane_change_route"]:
                     if success_flag:
                         success_log.append(1)
                     else:
@@ -502,7 +517,8 @@ class Trainer:
                     # =======================================================================
 
                 else:
-                    print("[TRAINER] skipped episode: no pedestrian spawned")
+                    # print("[TRAINER] skipped episode: no pedestrian spawned")
+                    print(f"[TRAINER] skipped episode: {done_reason}")
 
 
                 # success_log.append(1 if success_flag else 0)
@@ -823,102 +839,238 @@ class Trainer:
             self.logger.error("Please specify model directory by passing command line argument `--model-dir`")
             exit(-1)
         res = self.evaluate_policy(total_steps=0,plot_map_mode=plot_map_mode)
-        print("Evaluation Total Steps: {0: 7} Average Reward {1: 5.4f},success rate:{3}, over {2: 2} episodes".format(
-                    res[0], res[1], self._test_episodes,res[2]))
+        print("Evaluation Total Steps: {0: 7}, Average Reward {1: 5.4f}, success rate:{3}, over {2: 2} episodes".format(
+                    res[0], res[1], self._test_episodes, res[2]))
         
 
-    def evaluate_policy(self, total_steps,plot_map_mode=False):
-        # tf.summary.experimental.set_step(total_steps)
 
-        # if self._normalize_obs:
-        #     self._test_env.normalizer.set_params(*self._env.normalizer.get_params())
-
+    def evaluate_policy(self, total_steps, plot_map_mode=False):
         if self._normalize_obs and hasattr(self._env, "normalizer") and hasattr(self._test_env, "normalizer"):
             self._test_env.normalizer.set_params(*self._env.normalizer.get_params())
 
-        avg_test_return = 0.
+        avg_test_return = 0.0
         avg_test_steps = 0
+
+        saved_rollouts = 0
 
         success_time = 0
         col_time = 0
         stag_time = 0
-        ego_data=[]
-        all_step=[]
-        full_step =[]
-
+        ego_data = []
+        all_step = []
+        full_step = []
 
         if self._save_test_path:
             replay_buffer = get_replay_buffer(self._policy, self._test_env, size=self._episode_max_steps)
 
         for i in tqdm(range(self._test_episodes)):
-            episode_return = 0.
+            episode_return = 0.0
             epi_step = 0
-            epi_state=[]
+            epi_state = []
 
-            obs = self._test_env.reset()
+            reset_out = self._test_env.reset()
             reset_info = None
-            if isinstance(obs, (tuple, list)) and len(obs) == 2 and isinstance(obs[1], dict):
-                obs, reset_info = obs
+
+            if isinstance(reset_out, (tuple, list)) and len(reset_out) == 2 and isinstance(reset_out[1], dict):
+                obs, reset_info = reset_out
+            else:
+                obs = reset_out
+
+            vision = reset_info.get("vision", None) if isinstance(reset_info, dict) else None
+            next_vision = None
 
             if self.use_map:
-                print('================ ENTROU use_map =============')
                 obs, ego, map_s = obs
-                map_s = self._adapt_map_state(map_s, neighbors=self.neighbors,
-                                  path_len=self.path_length, target_dim=5)
+                map_s = self._adapt_map_state(
+                    map_s,
+                    neighbors=self.neighbors,
+                    path_len=self.path_length,
+                    target_dim=5
+                )
+            else:
+                ego = None
+                map_s = None
 
-            hidden,full_hidden,next_hidden=None,None,None
+            hidden, full_hidden, next_hidden = None, None, None
             avg_test_steps += 1
 
+            traj = None
+            if self._save_eval_rollouts:
+                traj = {"episode_id": i,
+                        "task_name": getattr(getattr(self._test_env, "task", None), "name", None),
+                        "curriculum_level": int(getattr(getattr(self._test_env, "task", None), "curriculum_level", 0)),
+                        "steps": [],
+                        }
+                
             for j in range(self._episode_max_steps):
                 if self.use_mask:
-                    num = np.clip(j+1,0,self.timesteps)
-                    mask = np.array([1]*num +[0]*(self.timesteps - num))
+                    num = np.clip(j + 1, 0, self.timesteps)
+                    mask = np.array([1] * num + [0] * (self.timesteps - num), dtype=np.float32)
                     mask = np.expand_dims(mask, axis=0)
                 else:
-                    mask=None
+                    mask = None
 
-                if epi_step%self.skip_timestep==0:
-                    # if vision is None:
-                    #     vision_batch = None
-                    # else:
-                    #     vision_batch = np.expand_dims(vision, axis=0).astype(np.float32)
-                
+                # if epi_step % self.skip_timestep == 0:
+                #     vision_batch = None if vision is None else np.expand_dims(np.asarray(vision, dtype=np.float32), axis=0)
+                #     map_batch = None if not self.use_map else np.expand_dims(np.asarray(map_s, dtype=np.float32), axis=0)
+
+                #     if self._save_eval_rollouts:
+                #     #     action_pack = self._policy.get_action_with_stats(
+                #     #         np.expand_dims(obs, 0),
+                #     #         test=True,
+                #     #         mask=mask,
+                #     #         map_state=map_batch,
+                #     #         vision=vision_batch,
+                #     #     )
+
+                #     #     act = np.asarray(action_pack["action"][0], dtype=np.float32)
+                #     #     mean_raw = np.asarray(action_pack["mean_raw"][0], dtype=np.float32)
+                #     #     log_std = np.asarray(action_pack["log_std"][0], dtype=np.float32)
+                #     #     std_raw = np.exp(log_std).astype(np.float32)
+                #     #     mean_action = np.asarray(action_pack["mean_action"][0], dtype=np.float32)
+                #     # else:
+                #     #     action = self._policy.get_action(
+                #     #         np.expand_dims(obs, 0),
+                #     #         test=True,
+                #     #         mask=mask,
+                #     #         map_state=map_batch,
+                #     #         vision=vision_batch,
+                #     #     )
+                #     #     if hasattr(action, "numpy"):
+                #     #         action = action.numpy()
+                #     #     act = np.asarray(action[0], dtype=np.float32)
+
+                #         action = self._policy.get_action(
+                #             np.expand_dims(obs, 0),
+                #             test=True,
+                #             mask=mask,
+                #             map_state=map_batch,
+                #             vision=vision_batch,
+                #         )
+                #         if hasattr(action, "numpy"):
+                #             action = action.numpy()
+                #         act = np.asarray(action[0], dtype=np.float32)
+
+                #         if self._save_eval_rollouts:
+                #             action_pack = self._policy.get_action_with_stats(
+                #                 np.expand_dims(obs, 0),
+                #                 test=True,
+                #                 mask=mask,
+                #                 map_state=map_batch,
+                #                 vision=vision_batch,
+                #             )
+                #             mean_raw = np.asarray(action_pack["mean_raw"][0], dtype=np.float32)
+                #             log_std = np.asarray(action_pack["log_std"][0], dtype=np.float32)
+                #             std_raw = np.exp(log_std).astype(np.float32)
+                #             mean_action = np.asarray(action_pack["mean_action"][0], dtype=np.float32)
+
+                # next_obs_out, reward, done, info = self._test_env.step(act)
+
+                # next_vision = info.get("vision", None) if isinstance(info, dict) else None
+
+                # line = obs[-1, :3]
+                # epi_state.append(line)
+
+                if epi_step % self.skip_timestep == 0:
+                    map_batch = None if not self.use_map else np.expand_dims(np.asarray(map_s, dtype=np.float32), axis=0)
+
+                    # usa exatamente o caminho antigo para controlar o carro
                     action = self._policy.get_action(np.expand_dims(obs, 0),
-                                                     test=True,
-                                                     mask=mask,
-                                                     map_state=np.expand_dims(map_s,0),
-                                                     # visoon=vision_batch,
-                                                     )
-                    act = action[0].numpy()
-                
-                next_obs, reward, done, info = self._test_env.step( act)
-                line = obs[-1,:3]
+                                                    test=True,
+                                                    mask=mask,
+                                                    map_state=map_batch,
+                                                    # vision=None   # sem visão por enquanto
+                                                    )
+                    if hasattr(action, "numpy"):
+                        action = action.numpy()
+                    act = np.asarray(action[0], dtype=np.float32)
+
+                    # só pega stats para salvar, sem influenciar a ação executada
+                    if self._save_eval_rollouts:
+                        action_pack = self._policy.get_action_with_stats(np.expand_dims(obs, 0),
+                                                                        test=True,
+                                                                        mask=mask,
+                                                                        map_state=map_batch,
+                                                                        # vision=None
+                                                                    )
+                        
+                        mean_raw = np.asarray(action_pack["mean_raw"][0], dtype=np.float32)
+                        log_std = np.asarray(action_pack["log_std"][0], dtype=np.float32)
+                        std_raw = np.exp(log_std).astype(np.float32)
+                        mean_action = np.asarray(action_pack["mean_action"][0], dtype=np.float32)
+
+                next_obs_out, reward, done, info = self._test_env.step(act)
+
+                next_vision = info.get("vision", None) if isinstance(info, dict) else None
+
+                line = obs[-1, :3]
                 epi_state.append(line)
 
                 if self.use_map:
-                    next_obs,next_ego,next_map_s = next_obs
-                    next_map_s = self._adapt_map_state(next_map_s, neighbors=self.neighbors,
-                                       path_len=self.path_length, target_dim=5)
+                    next_obs, next_ego, next_map_s = next_obs_out
+                    next_map_s = self._adapt_map_state(
+                        next_map_s,
+                        neighbors=self.neighbors,
+                        path_len=self.path_length,
+                        target_dim=5
+                    )
+                else:
+                    next_obs = next_obs_out
+                    next_ego = None
+                    next_map_s = None
 
                 avg_test_steps += 1
                 epi_step += 1
-                
+
                 if self._save_test_path:
-                    replay_buffer.add(obs=obs, act=action, next_obs=next_obs, rew=reward, done=done)
-                
-                if self.bptt_hidden>0 :
-                    next_hidden = np.expand_dims(full_hidden[(j)%self.timesteps],0)
-                    if (j+1)%self.timesteps==0:
+                    replay_buffer.add(obs=obs, act=act, next_obs=next_obs, rew=reward, done=done)
+
+                if self.bptt_hidden > 0:
+                    next_hidden = np.expand_dims(full_hidden[(j) % self.timesteps], 0)
+                    if (j + 1) % self.timesteps == 0:
                         full_hidden = n_h.squeeze(axis=0)
+
+                if self._save_eval_rollouts and traj is not None:
+                    traj["steps"].append({"obs": np.asarray(obs, dtype=np.float32),
+                                          "act": np.asarray(act, dtype=np.float32),
+
+                                          "teacher_mean_raw": np.asarray(mean_raw, dtype=np.float32),
+                                          "teacher_log_std": np.asarray(log_std, dtype=np.float32),
+                                          "teacher_std_raw": np.asarray(std_raw, dtype=np.float32),
+                                          "teacher_mean_action": np.asarray(mean_action, dtype=np.float32),
+
+                                          "rew": float(reward),
+                                          "next_obs": np.asarray(next_obs, dtype=np.float32),
+                                          "done": bool(done),
+
+                                          "vision": None if vision is None else np.asarray(vision, dtype=np.float32),
+                                          "next_vision": None if next_vision is None else np.asarray(next_vision, dtype=np.float32),
+
+                                          "map_state": None if not self.use_map or map_s is None else np.asarray(map_s, dtype=np.float32),
+                                          "next_map_state": None if not self.use_map or next_map_s is None else np.asarray(next_map_s, dtype=np.float32),
+
+                                          "info": {"finish": bool(info.get("finish", False)) if isinstance(info, dict) else False,
+                                                    "done_reason": info.get("done_reason", None) if isinstance(info, dict) else None,
+                                                    "progress": float(info.get("progress", 0.0)) if isinstance(info, dict) else 0.0,
+                                                    "dist_to_goal": float(info.get("dist_to_goal", 0.0)) if isinstance(info, dict) else 0.0,
+                                                    "lateral_error": float(info.get("lateral_error", 0.0)) if isinstance(info, dict) else 0.0,
+                                                    "heading_error": float(info.get("heading_error", 0.0)) if isinstance(info, dict) else 0.0,
+                                                    "speed_kmh": float(info.get("speed_kmh", 0.0)) if isinstance(info, dict) else 0.0,
+                                                    "collision": bool(info.get("collision", False)) if isinstance(info, dict) else False,
+                                                },
+                                            })
 
                 episode_return += reward
                 obs = next_obs
+                vision = next_vision
 
                 if self.use_map:
                     map_s = next_map_s
-                if self.bptt_hidden>0:
+                    ego = next_ego
+
+                if self.bptt_hidden > 0:
                     hidden = next_hidden
-                
+
                 if done:
                     ego_data.append(epi_state)
                     event = info
@@ -932,37 +1084,209 @@ class Trainer:
                             stag_time += 1
                     else:
                         if event[0]:
-                            success_time +=1
-                            # all_step.append(epi_step)
+                            success_time += 1
                         if event[1]:
-                            col_time +=1
+                            col_time += 1
                         if event[-1]:
-                            stag_time +=1
+                            stag_time += 1
+
                     break
 
             prefix = "step_{0:08d}_epi_{1:02d}_return_{2:010.4f}".format(total_steps, i, episode_return)
             avg_test_return += episode_return
-        
-        s_r,c_r,stag = success_time/self._test_episodes , col_time/self._test_episodes , stag_time/self._test_episodes
-        
-        print(f'mean_return:{avg_test_return / self._test_episodes}'
-              f'success rate:{s_r}'
-              f'collision rate:{c_r}'
-              f'stagnation:{stag}'
-              )
-        
+
+            if self._save_eval_rollouts and traj is not None:
+                traj["success"] = bool(traj["steps"][-1]["info"]["finish"]) if traj["steps"] else False
+                traj["return"] = float(episode_return)
+                traj["length"] = int(len(traj["steps"]))
+
+                should_save = True
+                if self._save_only_success and not traj["success"]:
+                    should_save = False
+
+                if should_save:
+                    out_path = os.path.join(self.eval_rollout_dir, f"eval_ep_{i:04d}.pkl")
+                    with open(out_path, "wb") as f:
+                        pickle.dump(traj, f)
+
+                    saved_rollouts += 1
+
+            # if self._save_eval_rollouts and traj is not None:
+            #     traj["success"] = bool(traj["steps"][-1]["info"]["finish"]) if traj["steps"] else False
+            #     traj["return"] = float(episode_return)
+            #     traj["length"] = int(len(traj["steps"]))
+
+            #     out_path = os.path.join(self.eval_rollout_dir, f"eval_ep_{i:04d}.pkl")
+            #     with open(out_path, "wb") as f:
+            #         pickle.dump(traj, f)
+
+        s_r = success_time / self._test_episodes
+        c_r = col_time / self._test_episodes
+        stag = stag_time / self._test_episodes
+
+        print(
+            f'mean_return:{avg_test_return / self._test_episodes}'
+            f'success rate:{s_r}'
+            f'collision rate:{c_r}'
+            f'stagnation:{stag}'
+        )
+
         step_for_tb = total_steps
         if step_for_tb == 0:
-            # usar o passo do ckpt se esta avaliação veio de um checkpoint específico
             step_for_tb = self._ckpt_step_from_path(getattr(self, "_latest_path_ckpt", None) or self._model_dir) or 0
 
+        if self._save_eval_rollouts:
+            print(f"[Eval Rollouts] saved={saved_rollouts} / {self._test_episodes}")
+
         with self.tb_eval.as_default():
-            tf.summary.scalar("eval/avg_return",  avg_test_return / self._test_episodes, step=step_for_tb)
-            tf.summary.scalar("eval/success_rate", success_time / self._test_episodes,    step=step_for_tb)
-            tf.summary.scalar("eval/avg_steps",   avg_test_steps / self._test_episodes,   step=step_for_tb)
+            tf.summary.scalar("eval/avg_return", avg_test_return / self._test_episodes, step=step_for_tb)
+            tf.summary.scalar("eval/success_rate", success_time / self._test_episodes, step=step_for_tb)
+            tf.summary.scalar("eval/avg_steps", avg_test_steps / self._test_episodes, step=step_for_tb)
         self.tb_eval.flush()
 
-        return avg_test_return / self._test_episodes, avg_test_steps / self._test_episodes,success_time / self._test_episodes
+        return (avg_test_return / self._test_episodes,
+                avg_test_steps / self._test_episodes,
+                success_time / self._test_episodes
+            )
+
+        
+
+    # def evaluate_policy(self, total_steps,plot_map_mode=False):
+    #     # tf.summary.experimental.set_step(total_steps)
+
+    #     # if self._normalize_obs:
+    #     #     self._test_env.normalizer.set_params(*self._env.normalizer.get_params())
+
+    #     if self._normalize_obs and hasattr(self._env, "normalizer") and hasattr(self._test_env, "normalizer"):
+    #         self._test_env.normalizer.set_params(*self._env.normalizer.get_params())
+
+    #     avg_test_return = 0.
+    #     avg_test_steps = 0
+
+    #     success_time = 0
+    #     col_time = 0
+    #     stag_time = 0
+    #     ego_data=[]
+    #     all_step=[]
+    #     full_step =[]
+
+    #     if self._save_test_path:
+    #         replay_buffer = get_replay_buffer(self._policy, self._test_env, size=self._episode_max_steps)
+
+    #     for i in tqdm(range(self._test_episodes)):
+    #         episode_return = 0.
+    #         epi_step = 0
+    #         epi_state=[]
+
+    #         obs = self._test_env.reset()
+    #         reset_info = None
+    #         if isinstance(obs, (tuple, list)) and len(obs) == 2 and isinstance(obs[1], dict):
+    #             obs, reset_info = obs
+
+    #         if self.use_map:
+    #             print('================ ENTROU use_map =============')
+    #             obs, ego, map_s = obs
+    #             map_s = self._adapt_map_state(map_s, neighbors=self.neighbors,
+    #                               path_len=self.path_length, target_dim=5)
+
+    #         hidden,full_hidden,next_hidden=None,None,None
+    #         avg_test_steps += 1
+
+    #         for j in range(self._episode_max_steps):
+    #             if self.use_mask:
+    #                 num = np.clip(j+1,0,self.timesteps)
+    #                 mask = np.array([1]*num +[0]*(self.timesteps - num))
+    #                 mask = np.expand_dims(mask, axis=0)
+    #             else:
+    #                 mask=None
+
+    #             if epi_step%self.skip_timestep==0:
+    #                 # if vision is None:
+    #                 #     vision_batch = None
+    #                 # else:
+    #                 #     vision_batch = np.expand_dims(vision, axis=0).astype(np.float32)
+                
+    #                 action = self._policy.get_action(np.expand_dims(obs, 0),
+    #                                                  test=True,
+    #                                                  mask=mask,
+    #                                                  map_state=np.expand_dims(map_s,0),
+    #                                                  # visoon=vision_batch,
+    #                                                  )
+    #                 act = action[0].numpy()
+                
+    #             next_obs, reward, done, info = self._test_env.step( act)
+    #             line = obs[-1,:3]
+    #             epi_state.append(line)
+
+    #             if self.use_map:
+    #                 next_obs,next_ego,next_map_s = next_obs
+    #                 next_map_s = self._adapt_map_state(next_map_s, neighbors=self.neighbors,
+    #                                    path_len=self.path_length, target_dim=5)
+
+    #             avg_test_steps += 1
+    #             epi_step += 1
+                
+    #             if self._save_test_path:
+    #                 replay_buffer.add(obs=obs, act=action, next_obs=next_obs, rew=reward, done=done)
+                
+    #             if self.bptt_hidden>0 :
+    #                 next_hidden = np.expand_dims(full_hidden[(j)%self.timesteps],0)
+    #                 if (j+1)%self.timesteps==0:
+    #                     full_hidden = n_h.squeeze(axis=0)
+
+    #             episode_return += reward
+    #             obs = next_obs
+
+    #             if self.use_map:
+    #                 map_s = next_map_s
+    #             if self.bptt_hidden>0:
+    #                 hidden = next_hidden
+                
+    #             if done:
+    #                 ego_data.append(epi_state)
+    #                 event = info
+
+    #                 if isinstance(event, dict):
+    #                     if event.get("finish", False):
+    #                         success_time += 1
+    #                     if event.get("collision", False):
+    #                         col_time += 1
+    #                     if event.get("max_time", False):
+    #                         stag_time += 1
+    #                 else:
+    #                     if event[0]:
+    #                         success_time +=1
+    #                         # all_step.append(epi_step)
+    #                     if event[1]:
+    #                         col_time +=1
+    #                     if event[-1]:
+    #                         stag_time +=1
+    #                 break
+
+    #         prefix = "step_{0:08d}_epi_{1:02d}_return_{2:010.4f}".format(total_steps, i, episode_return)
+    #         avg_test_return += episode_return
+        
+    #     s_r,c_r,stag = success_time/self._test_episodes , col_time/self._test_episodes , stag_time/self._test_episodes
+        
+    #     print(f'mean_return:{avg_test_return / self._test_episodes}'
+    #           f'success rate:{s_r}'
+    #           f'collision rate:{c_r}'
+    #           f'stagnation:{stag}'
+    #           )
+        
+    #     step_for_tb = total_steps
+    #     if step_for_tb == 0:
+    #         # usar o passo do ckpt se esta avaliação veio de um checkpoint específico
+    #         step_for_tb = self._ckpt_step_from_path(getattr(self, "_latest_path_ckpt", None) or self._model_dir) or 0
+
+    #     with self.tb_eval.as_default():
+    #         tf.summary.scalar("eval/avg_return",  avg_test_return / self._test_episodes, step=step_for_tb)
+    #         tf.summary.scalar("eval/success_rate", success_time / self._test_episodes,    step=step_for_tb)
+    #         tf.summary.scalar("eval/avg_steps",   avg_test_steps / self._test_episodes,   step=step_for_tb)
+    #     self.tb_eval.flush()
+
+    #     return avg_test_return / self._test_episodes, avg_test_steps / self._test_episodes,success_time / self._test_episodes
+
 
     def _set_from_args(self, args):
         # experiment settings
@@ -993,6 +1317,10 @@ class Trainer:
         self._save_test_path = args.save_test_path
         self._save_test_movie = args.save_test_movie
         self._show_test_images = args.show_test_images
+
+        self._save_eval_rollouts = getattr(args, "save_eval_rollouts", False)
+        self._eval_rollout_dir = getattr(args, "eval_rollout_dir", None)
+        self._save_only_success = getattr(args, "save_only_success", False)
 
     @staticmethod
     def get_argument(parser=None):
@@ -1038,6 +1366,17 @@ class Trainer:
                             help='Show input images to neural networks when an episode finishes')
         parser.add_argument('--save-test-movie', action='store_true',
                             help='Save rendering results')
+        
+        
+        parser.add_argument('--save-eval-rollouts', action='store_true',
+                    help='Save trajectories from evaluation episodes')
+        parser.add_argument('--eval-rollout-dir', type=str, default=None,
+                    help='Directory to save evaluation trajectories')
+        
+        parser.add_argument('--save-only-success', action='store_true',
+                    help='Save only successful evaluation trajectories')
+        
+
         # replay buffer
         parser.add_argument('--use-prioritized-rb', action='store_true',
                             help='Flag to use prioritized experience replay')

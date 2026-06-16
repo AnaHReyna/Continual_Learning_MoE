@@ -1,5 +1,6 @@
 # envs/carla_route_env.py
 import sys
+from unicodedata import name
 sys.path.append("/home/ana/Documents/Architecture_Transformers_SR/scenario_runner")
 sys.path.append("/home/ana/CARLA_0.9.13/PythonAPI/carla")
 
@@ -26,7 +27,7 @@ class EnvConfig:
     traffic_manager_port = 8000
     timeout = 120.0
 
-    route_file = "/home/ana/Documents/Architecture_Transformers_SR/envs/routes_Town10HD_Opt.xml"
+    route_file = "/home/ana/Documents/Continual_Learning_MoE/Teacher/envs/generate_XML/routes_Town10HD_Opt.xml" 
     route_id = None
     route_town = "Town10HD_Opt"
 
@@ -36,7 +37,7 @@ class EnvConfig:
     max_episode_steps = 300
     target_speed_kmh = 25.0
     ego_filter = "vehicle.lincoln.mkz_2017"
-    seed = 0
+    seed = 1
 
     render_rgb_camera = False
     front_camera_width = 640
@@ -44,7 +45,7 @@ class EnvConfig:
     front_camera_fov = 70
 
     spectator_follow = False
-    spectator_height_m = 25.0
+    spectator_height_m = 40.0
     spectator_rotate_with_ego = False
 
     show_bev = False
@@ -77,14 +78,38 @@ class CollisionSensor:
         weak_self = weakref.ref(self)
         self.sensor.listen(lambda event: CollisionSensor._on_collision(weak_self, event))
 
+    # @staticmethod
+    # def _on_collision(weak_self, event):
+    #     self = weak_self()
+    #     if not self:
+    #         return
+    #     impulse = event.normal_impulse
+    #     intensity = math.sqrt(impulse.x ** 2 + impulse.y ** 2 + impulse.z ** 2)
+    #     self.history.append((event.frame, intensity))
+
     @staticmethod
     def _on_collision(weak_self, event):
         self = weak_self()
         if not self:
             return
+
         impulse = event.normal_impulse
-        intensity = math.sqrt(impulse.x ** 2 + impulse.y ** 2 + impulse.z ** 2)
-        self.history.append((event.frame, intensity))
+        intensity = math.sqrt(
+            impulse.x ** 2 +
+            impulse.y ** 2 +
+            impulse.z ** 2
+        )
+
+        # print(
+        #     "[COLLISION EVENT]",
+        #     "frame=", event.frame,
+        #     "actor=", event.other_actor.type_id,
+        #     "intensity=", intensity
+        # )
+
+        self.history.append(
+            (event.frame, intensity)
+        )
 
     def clear(self):
         self.history.clear()
@@ -183,8 +208,7 @@ class CarlaRouteEnv(object):
 
         self.blueprint_library = None
         self.sem_cam = None
-        # self.cnn_model = load_model("/home/ana/Documents/Architecture_Transformers_SR/CNN_image_embedding_model.h5", compile=False,)
-        self.cnn_model = load_model("/home/ana/Documents/Architecture_Transformers_SR/CNN_image_model.h5", compile=False,)
+        self.cnn_model = load_model("/home/ana/Documents/Continual_Learning_MoE/Teacher/envs/train_CNN_image/CNN_image_model.h5", compile=False,)
 
         self.prev_steer = 0.0
         self.target_speed = self.cfg.target_speed_kmh
@@ -194,10 +218,32 @@ class CarlaRouteEnv(object):
         self._route_total_length = None
 
         # debug drawing
-        self.draw_debug_routes = False
+        self.draw_debug_routes = True
+
+        # Alturas dos desenhos no mundo.
+        # A rota XML fica um pouco mais baixa; a trajetória real do ego fica acima,
+        # para aparecer melhor na captura de tela.
         self.debug_route_z = 0.5
-        self.debug_policy_z = 1.0
-        self.debug_draw_life_time = 0.25
+        self.debug_policy_z = 1.5
+
+        # Tempo de vida dos desenhos no CARLA.
+        # IMPORTANTE:
+        # O CARLA DebugHelper não tem um comando simples para apagar linhas já desenhadas.
+        # Por isso, a trajetória do ego NÃO pode usar life_time muito alto, senão
+        # as linhas de episódios antigos ficam marcadas no mapa.
+        #
+        # Solução usada aqui:
+        # - a trajetória do episódio atual é redesenhada completa a cada step;
+        # - cada desenho vive pouco tempo;
+        # - quando começa outro episódio, a trajetória anterior some sozinha.
+        self.debug_draw_life_time = 1.0
+        self.debug_policy_life_time = 1.0
+
+        # A cada quantos steps a trajetória completa será redesenhada.
+        # 1 = mais bonito/estável para screenshot, mas desenha mais linhas.
+        self.debug_policy_redraw_every_steps = 1
+
+        # Histórico completo da trajetória realmente percorrida pelo ego.
         self.policy_route_history: List[carla.Location] = []
 
         self.scenario = None
@@ -260,7 +306,9 @@ class CarlaRouteEnv(object):
 
         dbg = self.world.debug
 
-        route_color = carla.Color(0, 255, 0)      # green
+        # Rota XML/reference route. Deixei cinza para não confundir com
+        # a trajetória real do ego, que será desenhada em verde.
+        route_color = carla.Color(180, 180, 180)  # gray
         start_color = carla.Color(0, 0, 255)      # blue
         end_color = carla.Color(255, 0, 0)        # red
         dir_color = carla.Color(255, 255, 0)      # yellow
@@ -298,28 +346,128 @@ class CarlaRouteEnv(object):
 
 
     def _reset_policy_route_history(self):
+        """Inicializa o histórico da trajetória real do ego no episódio atual."""
         self.policy_route_history = []
-        if self.ego is not None:
+
+        if self.ego is not None and self.ego.is_alive:
             loc = self.ego.get_location()
-            self.policy_route_history.append(carla.Location(x=loc.x, y=loc.y, z=loc.z))
+            self.policy_route_history.append(
+                carla.Location(x=loc.x, y=loc.y, z=loc.z)
+            )
 
 
-    def _draw_policy_route_incremental(self, prev_loc: carla.Location, curr_loc: carla.Location, life_time: float = None):
+    def _draw_policy_start_marker(self, life_time: float = None):
+        """Marca o ponto inicial da trajetória real do ego."""
         if life_time is None:
-            life_time = self.debug_draw_life_time
+            life_time = self.debug_policy_life_time
+
+        if self.world is None or len(self.policy_route_history) == 0:
+            return
+
+        dbg = self.world.debug
+        start_loc = self._dbg_loc(
+            self.policy_route_history[0],
+            self.debug_policy_z + 0.20,
+        )
+
+        dbg.draw_point(
+            start_loc,
+            size=0.22,
+            color=carla.Color(0, 0, 255),  # azul
+            life_time=life_time,
+        )
+
+        dbg.draw_string(
+            start_loc + carla.Location(z=0.35),
+            "EGO START",
+            draw_shadow=False,
+            color=carla.Color(0, 0, 255),
+            life_time=life_time,
+        )
+
+
+    def _draw_policy_end_marker(self, life_time: float = None):
+        """Marca a posição final/atual da trajetória real do ego."""
+        if life_time is None:
+            life_time = self.debug_policy_life_time
+
+        if self.world is None or len(self.policy_route_history) == 0:
+            return
+
+        dbg = self.world.debug
+        end_loc = self._dbg_loc(
+            self.policy_route_history[-1],
+            self.debug_policy_z + 0.20,
+        )
+
+        dbg.draw_point(
+            end_loc,
+            size=0.22,
+            color=carla.Color(255, 0, 0),  # vermelho
+            life_time=life_time,
+        )
+
+        dbg.draw_string(
+            end_loc + carla.Location(z=0.35),
+            "EGO END",
+            draw_shadow=False,
+            color=carla.Color(255, 0, 0),
+            life_time=life_time,
+        )
+
+
+    def _draw_policy_route_incremental(
+        self,
+        prev_loc: carla.Location,
+        curr_loc: carla.Location,
+        life_time: float = None,
+    ):
+        """Desenha um novo segmento da trajetória real percorrida pelo ego."""
+        if life_time is None:
+            life_time = self.debug_policy_life_time
 
         if self.world is None or prev_loc is None or curr_loc is None:
             return
 
         dbg = self.world.debug
-        color = carla.Color(255, 0, 255)  # magenta
+        color = carla.Color(0, 255, 0)  # VERDE = trajetória real do ego
 
         a = self._dbg_loc(prev_loc, self.debug_policy_z)
         b = self._dbg_loc(curr_loc, self.debug_policy_z)
 
-        dbg.draw_line(a, b, thickness=0.10, color=color, life_time=life_time,)
+        dbg.draw_line(
+            a,
+            b,
+            thickness=0.18,
+            color=color,
+            life_time=life_time,
+        )
 
-        dbg.draw_point(b, size=0.10, color=color, life_time=life_time,)
+        dbg.draw_point(
+            b,
+            size=0.12,
+            color=color,
+            life_time=life_time,
+        )
+
+
+    def _draw_full_policy_route(self, life_time: float = None):
+        """Redesenha a trajetória completa do ego acumulada no episódio."""
+        if life_time is None:
+            life_time = self.debug_policy_life_time
+
+        if self.world is None or len(self.policy_route_history) < 2:
+            return
+
+        for i in range(len(self.policy_route_history) - 1):
+            self._draw_policy_route_incremental(
+                self.policy_route_history[i],
+                self.policy_route_history[i + 1],
+                life_time=life_time,
+            )
+
+        self._draw_policy_start_marker(life_time=life_time)
+        self._draw_policy_end_marker(life_time=life_time)
 
     # ============================================================================================================================
 
@@ -333,14 +481,13 @@ class CarlaRouteEnv(object):
                                                            scenario_file=None,
                                                            single_route=self.cfg.route_id,
                                                            )
-        
         if not self.route_configs:
             raise RuntimeError("No route found in the XML file.")
 
 
 
 
-    def _choose_route(self):
+    def _choose_route(self): 
         if self.cfg.route_id is not None:
             self.route_config = self.route_configs[0]
             return
@@ -408,17 +555,37 @@ class CarlaRouteEnv(object):
 
 
         
+    # def _prepare_route(self):
+    #     assert self.world is not None
+    #     assert self.route_config is not None
+
+    #     _, dense_route = interpolate_trajectory(self.world, self.route_config.trajectory)
+    #     self.route_dense = dense_route
+
+    #     self.route_waypoints = []
+    #     for wp in self.route_dense:
+    #         self.route_waypoints.append(wp[0])
+
+
+    #     self._route_xy = None
+    #     self._route_s = None
+    #     self._route_total_length = None
+
+    #     if len(self.route_waypoints) < 2:
+    #         raise RuntimeError("The interpolated route was too short.")
+        
+
     def _prepare_route(self):
         assert self.world is not None
         assert self.route_config is not None
 
         _, dense_route = interpolate_trajectory(self.world, self.route_config.trajectory)
         self.route_dense = dense_route
+        print(f"Tamanho da trajetoria interpolada: {len(self.route_dense)} waypoints")
 
         self.route_waypoints = []
         for wp in self.route_dense:
             self.route_waypoints.append(wp[0])
-
 
         self._route_xy = None
         self._route_s = None
@@ -427,6 +594,24 @@ class CarlaRouteEnv(object):
         if len(self.route_waypoints) < 2:
             raise RuntimeError("The interpolated route was too short.")
         
+        self._ensure_route_cache()  # compute the length real the route use in the episode, so we can filter out very short routes that are not useful for training.
+
+        # print("DEBUG ROUTE CONFIG")
+        # print(vars(self.route_config))
+
+        route_name = getattr(self.route_config, "name", "unknown")
+        route_id = getattr(self.route_config, "id", "unknown")
+        town = getattr(self.route_config, "town", "unknown")
+
+        self.route_name = route_name
+        self.route_id = route_id
+
+        # print(f"[ROUTE LENGTH] "
+        #       f"name={route_name} id={route_id} town={town} "
+        #       f"waypoints={len(self.route_waypoints)} "
+        #       f"meters={self._route_total_length:.2f}"
+        #       )
+                    
 
 
     def _spawn_ego(self):
@@ -439,25 +624,115 @@ class CarlaRouteEnv(object):
         ego_bp = bp_lib.find(self.cfg.ego_filter)
         ego_bp.set_attribute("role_name", "hero")
 
-        base_tf = self.route_waypoints[0]
+        candidate_indices = [0, 3, 5, 8, 10, 15]
+        candidate_indices = [i for i in candidate_indices if i < len(self.route_waypoints)]
 
         self.ego = None
-        for dz in [0.3, 0.5, 0.8, 1.0, 1.5, 2.0]:
-            spawn_transform = carla.Transform(base_tf.location, base_tf.rotation)
-            spawn_transform.location.z += dz
-            self.ego = self.world.try_spawn_actor(ego_bp, spawn_transform)
-            if self.ego is not None:
-                break
 
-        if self.ego is None:
-            print("[SPAWN DEBUG] route waypoint 0:",
-                base_tf.location, base_tf.rotation)
-            raise RuntimeError("Failed to spawn the ego vehicle at the start of the route.")
+        for idx in candidate_indices:
+            base_tf = self.route_waypoints[idx]
 
-        self.actor_handles.append(self.ego)
+            for dz in [0.5, 0.8, 1.0, 1.5, 2.0, 2.5]:
+                spawn_transform = carla.Transform(base_tf.location, base_tf.rotation)
+                spawn_transform.location.z += dz
 
-        self.collision_sensor = CollisionSensor(self.ego)
-        self.lane_sensor = LaneInvasionSensor(self.ego)
+                ego_candidate = self.world.try_spawn_actor(ego_bp, spawn_transform)
+
+                if ego_candidate is None:
+                    continue
+
+                temp_collision = CollisionSensor(ego_candidate)
+
+                for _ in range(3):
+                    self.world.tick()
+
+                has_collision = len(temp_collision.history) > 0
+
+                if has_collision:
+                    print(f"[EGO SPAWN BAD] idx={idx} dz={dz} collision={temp_collision.history}")
+
+                    temp_collision.destroy()
+                    try:
+                        ego_candidate.destroy()
+                    except Exception:
+                        pass
+
+                    for _ in range(2):
+                        self.world.tick()
+
+                    continue
+
+                temp_collision.destroy()
+
+                self.ego = ego_candidate
+                self.route_index = idx
+                self.actor_handles.append(self.ego)
+
+                print(f"[EGO SPAWN OK] route_idx={idx} dz={dz}")
+
+                self.collision_sensor = CollisionSensor(self.ego)
+                self.lane_sensor = LaneInvasionSensor(self.ego)
+                return
+
+        # print("[SPAWN DEBUG] failed for route:", getattr(self, "route_name", "unknown"))
+        # print("[SPAWN DEBUG] first waypoint:",
+        #     self.route_waypoints[0].location,
+        #     self.route_waypoints[0].rotation)
+
+        raise RuntimeError("Failed to spawn the ego vehicle in safe route waypoint.")
+
+
+
+    # def _spawn_ego(self):
+    #     assert self.world is not None
+    #     assert self.map is not None
+    #     assert self.route_config is not None
+    #     assert len(self.route_waypoints) > 0
+
+    #     bp_lib = self.world.get_blueprint_library()
+    #     ego_bp = bp_lib.find(self.cfg.ego_filter)
+    #     ego_bp.set_attribute("role_name", "hero")
+
+    #     # base_tf = self.route_waypoints[0]
+    #     candidate_indices = [0, 3, 5, 8, 10]
+    #     candidate_indices = [i for i in candidate_indices if i < len(self.route_waypoints)]
+
+    #     self.ego = None
+
+    #     for idx in candidate_indices:
+    #         base_tf = self.route_waypoints[idx]
+
+    #         for dz in [0.5, 0.8, 1.0, 1.5, 2.0]:
+    #             spawn_transform = carla.Transform(base_tf.location, base_tf.rotation)
+    #             spawn_transform.location.z += dz
+
+    #             self.ego = self.world.try_spawn_actor(ego_bp, spawn_transform)
+
+    #             if self.ego is not None:
+    #                 self.route_index = idx
+    #                 print(f"[EGO SPAWN] route_idx={idx}")
+    #                 break
+
+    #         if self.ego is not None:
+    #             break
+
+    #     self.ego = None
+    #     for dz in [0.3, 0.5, 0.8, 1.0, 1.5, 2.0]:
+    #         spawn_transform = carla.Transform(base_tf.location, base_tf.rotation)
+    #         spawn_transform.location.z += dz
+    #         self.ego = self.world.try_spawn_actor(ego_bp, spawn_transform)
+    #         if self.ego is not None:
+    #             break
+
+    #     if self.ego is None:
+    #         print("[SPAWN DEBUG] route waypoint 0:",
+    #             base_tf.location, base_tf.rotation)
+    #         raise RuntimeError("Failed to spawn the ego vehicle at the start of the route.")
+
+    #     self.actor_handles.append(self.ego)
+
+    #     self.collision_sensor = CollisionSensor(self.ego)
+    #     self.lane_sensor = LaneInvasionSensor(self.ego)
 
 
     # ====================== Traffic Manager ====================================================
@@ -528,11 +803,10 @@ class CarlaRouteEnv(object):
         current_idx = self._find_nearest_route_index(ego_loc)
         level = getattr(getattr(self, "task", None), "curriculum_level", 0)
 
-        print(
-            f"[TRAFFIC] level={level} requested={self.cfg.num_npc_vehicles} "
-            f"ego=({ego_loc.x:.2f}, {ego_loc.y:.2f}, {ego_loc.z:.2f}) "
-            f"route_idx={current_idx}"
-        )
+        print(f"[TRAFFIC] level={level} requested={self.cfg.num_npc_vehicles} "
+              f"ego=({ego_loc.x:.2f}, {ego_loc.y:.2f}, {ego_loc.z:.2f}) "
+              f"route_idx={current_idx}"
+              )
 
         def _loc_key(loc, precision=1):
             return (round(loc.x, precision), round(loc.y, precision), round(loc.z, precision))
@@ -567,6 +841,8 @@ class CarlaRouteEnv(object):
                         actor,
                         self._rng.randint(-15, 5)
                     )
+
+                    self.traffic_manager.ignore_lights_percentage(actor, 100.0)
 
                     self.npc_vehicles.append(actor)
                     self.actor_handles.append(actor)
@@ -1066,7 +1342,7 @@ class CarlaRouteEnv(object):
     def action_adapter(self, model_action):
         speed_norm = float(np.clip(model_action[0], -1.0, 1.0))
 
-        min_speed_kmh = 4.0
+        min_speed_kmh = 12.0
         max_speed_kmh = self.cfg.target_speed_kmh
 
         speed_kmh = min_speed_kmh + 0.5 * (speed_norm + 1.0) * (max_speed_kmh - min_speed_kmh)
@@ -1305,7 +1581,6 @@ class CarlaRouteEnv(object):
         target_town = self.route_config.town
 
         self._cleanup_actors()
-        self._reset_policy_route_history()
 
         if self.world is None:
             need_load_world = True
@@ -1325,11 +1600,29 @@ class CarlaRouteEnv(object):
             for _ in range(5):
                 self.world.tick()
 
+        for _ in range(10):
+            self.world.tick()
+
         self._prepare_route()
         self._spawn_ego()
 
+        # Agora que o ego existe, começa o histórico da trajetória real deste episódio.
+        self._reset_policy_route_history()
+
+        # route_ok = self._prepare_route()
+
+        # if not route_ok:
+            # return self.reset(seed=seed, options=options)
+
+        # self._spawn_ego()
+
         if self.task is not None:
             self.task.on_reset(self)
+
+        if getattr(self, "skip_episode", False):
+            print("[RESET] invalid route, trying another route")
+            self._cleanup_actors()
+            return self.reset(seed=seed, options=options)
 
         if self.cfg.num_npc_vehicles > 0:
             self._spawn_background_traffic()
@@ -1369,7 +1662,8 @@ class CarlaRouteEnv(object):
         self.prev_lateral_error = lateral_error
 
         if self.draw_debug_routes:
-            self._draw_xml_route(life_time=1.0)
+            self._draw_xml_route(life_time=self.debug_draw_life_time)
+            self._draw_full_policy_route(life_time=self.debug_policy_life_time)
 
         obs = self._get_structured_obs()
 
@@ -1417,8 +1711,15 @@ class CarlaRouteEnv(object):
         curr_loc = self.ego.get_location()
 
         if self.draw_debug_routes:
-            self.policy_route_history.append(carla.Location(x=curr_loc.x, y=curr_loc.y, z=curr_loc.z))
-            self._draw_policy_route_incremental(prev_loc, curr_loc, life_time=0.25)
+            curr_debug_loc = carla.Location(x=curr_loc.x, y=curr_loc.y, z=curr_loc.z)
+            self.policy_route_history.append(curr_debug_loc)
+
+            # Redesenha a trajetória COMPLETA do episódio atual em verde.
+            # Como life_time é curto, as linhas do episódio anterior desaparecem
+            # logo após o reset, evitando acumular trajetórias antigas na tela.
+            redraw_every = max(1, int(getattr(self, "debug_policy_redraw_every_steps", 1)))
+            if self.step_count % redraw_every == 0:
+                self._draw_full_policy_route(life_time=self.debug_policy_life_time)
 
 
         self._update_spectator()
@@ -1450,6 +1751,12 @@ class CarlaRouteEnv(object):
             reward, done, task_info = 0.0, False, {"finish": False, "done_reason": None}
         else:
             reward, done, task_info = self.task.compute_reward_done(self, base_info)
+
+        if done and self.draw_debug_routes:
+            # Reforça a linha completa no fim, mas ainda com life_time curto.
+            # Assim ela aparece no momento final, porém não fica contaminando
+            # o próximo episódio.
+            self._draw_full_policy_route(life_time=self.debug_policy_life_time)
 
         info = dict(base_info)
         info.update(task_info)

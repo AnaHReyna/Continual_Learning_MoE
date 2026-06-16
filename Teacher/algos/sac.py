@@ -144,6 +144,58 @@ class SAC(OffPolicyAgent):
                                                     test,
                                                     vision=vision)
             return action.numpy()[0] if is_single_state else action , h.numpy()
+        
+    def get_action_with_stats(self,
+                              state,
+                              mask=None,
+                              init_state=None,
+                              map_state=None,
+                              test=False,
+                              vision=None
+                              ):
+
+        assert isinstance(state, np.ndarray)
+        is_single_state = len(state.shape) == self.state_ndim
+        state = np.expand_dims(state, axis=0).astype(np.float32) if is_single_state else state
+
+        action, mean, log_std, mean_action = self._get_action_stats_body(tf.constant(state),
+                                                                         mask,
+                                                                         init_state,
+                                                                         map_state,
+                                                                         test,
+                                                                         vision=vision
+                                                                         )
+
+        if is_single_state:
+            return {"action": action.numpy()[0],
+                    "mean_raw": mean.numpy()[0],
+                    "log_std": log_std.numpy()[0],
+                    "mean_action": mean_action.numpy()[0],
+                    }
+
+        return {"action": action.numpy(),
+                "mean_raw": mean.numpy(),
+                "log_std": log_std.numpy(),
+                "mean_action": mean_action.numpy(),
+                }
+
+
+    @tf.function
+    def _get_action_stats_body(self, state, mask, init_state, map_state, test, vision=None):
+        current_h = self.qf._get_hidden(state,
+                                        mask=mask,
+                                        init_state=init_state,
+                                        map_state=map_state,
+                                        vision=vision
+                                        )
+
+        action, _, _, mean, log_std, mean_action = self.actor(current_h,
+                                                              test=test,
+                                                              return_stats=True
+                                                              )
+
+        return action, mean, log_std, mean_action
+    
     
     def get_pca_val(self, state, action, mask=None, init_state=None, map_state=None, test=True):
         assert isinstance(state, np.ndarray)

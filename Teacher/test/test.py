@@ -49,7 +49,9 @@ def main():
     test_env.action_space = ACTION_SPACE
 
     if args.model_dir == None:
-        args.model_dir = f"../train/{args.task}/{args.algo}_{cfg.seed}/ckpt"
+        # args.model_dir = f"../train/{args.task}/{args.algo}_{cfg.seed}/ckpt"
+        # args.model_dir = f"/home/ana/Documents/Architecture_Transformers_SR/student/student_results/stage1_lane/ckpt-20"
+        args.model_dir = f"/home/ana/Documents/Architecture_Transformers_SR/student/student_results/stage1_lane_mean"
 
 
     if args.algo == 'ppo':

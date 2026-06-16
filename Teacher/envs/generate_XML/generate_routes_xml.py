@@ -15,7 +15,8 @@ import xml.dom.minidom as minidom
 client = carla.Client('localhost', port=2000)
 client.set_timeout(seconds=10.0)
 # client.load_world('/Game/Carla/Maps/Town02_Opt')
-client.load_world('/Game/Carla/Maps/Town10HD_Opt')
+# client.load_world('/Game/Carla/Maps/Town10HD_Opt')
+client.load_world('/Game/Carla/Maps/Town04_Opt')
 
 world = client.get_world()
 map = world.get_map()

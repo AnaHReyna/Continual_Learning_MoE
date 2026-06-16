@@ -270,7 +270,7 @@ class Hierachial_Transformer(tf.keras.Model):
         self.summary()   # present archicteture 
         
 
-    def call(self,states, test=False, map_state=None, aug=True): 
+    def call(self,states, test=False, map_state=None, aug=True, return_tokens=False): 
 
         training= bool(1 - test) 
         mask = tf.not_equal(states, 0)[:, :, :, 0]   # mask: [batch, ego+neighbors, time_step]
@@ -350,6 +350,16 @@ class Hierachial_Transformer(tf.keras.Model):
             states = ego_states
         else:
             states = goals + ego_states #+ ego
+
+        
+        if return_tokens:
+            return {"states": states,          # (batch, num_traj, units)
+                    "actor_tokens": actor,     # (batch, ego+neighbors, units)
+                    "map_tokens": map,         # (batch, num_polylines, units)
+                    "actor_rel": actor_rel,    # (batch, units)
+                    "goal_tokens": goals,      # (batch, num_traj, units)
+                   }
+        
         if test:
             neighbor_val = [ego_val] + neighbor_val
             neighbor_val = tf.expand_dims(tf.concat(neighbor_val,axis=-1),axis=-1)
@@ -478,25 +488,46 @@ class RLEncoder(tf.keras.Model):
                                                               output_shape=self.rep_dim
                                                               )
             
-        self.norm1 = layers.LayerNormalization(axis=1)
-        self.norm2 = layers.LayerNormalization(axis=-1)
-        self.norm3 = layers.LayerNormalization(axis=1)
+        # self.norm1 = layers.LayerNormalization(axis=1)
+        # self.norm2 = layers.LayerNormalization(axis=-1)
+        # self.norm3 = layers.LayerNormalization(axis=1)
 
-        self.alpha = tf.Variable(1e-6, trainable=True, dtype=tf.float32)
-        self.beta = tf.Variable(1e-6, trainable=True, dtype=tf.float32)
+        # self.alpha = tf.Variable(1e-6, trainable=True, dtype=tf.float32)
+        # self.beta = tf.Variable(1e-6, trainable=True, dtype=tf.float32)
 
-        self.up_proj = layers.Dense(units=self.rep_dim*8, activation=None)
+        # self.up_proj = layers.Dense(units=self.rep_dim*8, activation=None)
         
-        self.out_proj = layers.Dense(units=self.rep_dim, activation=None)
+        # self.out_proj = layers.Dense(units=self.rep_dim, activation=None)
         
-        self.drop = layers.Dropout(0.1)
+        # self.drop = layers.Dropout(0.1)
         
-        if self.fusion_type == "cross":
-            self.down_proj = layers.Dense(units=self.rep_dim, activation=None)
-        elif self.fusion_type == "self":
-            self.down_proj = layers.Dense(units=self.rep_dim*2, activation=None)
-        else:
-            raise ValueError(f"attention type unkown! {self.fusion_type}")
+        # if self.fusion_type == "cross":
+        #     self.down_proj = layers.Dense(units=self.rep_dim, activation=None)
+        # elif self.fusion_type == "self":
+        #     self.down_proj = layers.Dense(units=self.rep_dim*2, activation=None)
+        # else:
+        #     raise ValueError(f"attention type unkown! {self.fusion_type}")
+
+
+        if self.use_vision:
+            self.norm1 = layers.LayerNormalization(axis=1)
+            self.norm2 = layers.LayerNormalization(axis=-1)
+            self.norm3 = layers.LayerNormalization(axis=1)
+
+            self.alpha = tf.Variable(1e-6, trainable=True, dtype=tf.float32)
+            self.beta = tf.Variable(1e-6, trainable=True, dtype=tf.float32)
+
+            self.up_proj = layers.Dense(units=self.rep_dim * 8, activation=None)
+            self.out_proj = layers.Dense(units=self.rep_dim, activation=None)
+            self.drop = layers.Dropout(0.1)
+
+            if self.fusion_type == "cross":
+                self.down_proj = layers.Dense(units=self.rep_dim, activation=None)
+            elif self.fusion_type == "self":
+                self.down_proj = layers.Dense(units=self.rep_dim * 2, activation=None)
+            else:
+                raise ValueError(f"attention type unkown! {self.fusion_type}")
+
         
         #################################### Antes descomentar  ##################################
         
@@ -534,10 +565,26 @@ class RLEncoder(tf.keras.Model):
         else:
             _ = self(dummy_state, dummy_mask, map_state=dummy_map, test=False)
 
-        self.summary()
+        # self.summary()
+
+        try:
+            self.summary()
+        except Exception as e:
+            print(f"[RLEncoder] summary skipped: {e}")
     
     
-    def call(self, states, mask, test=False, init_state=None, map_state=None, curr_frames=None, aug=True, vision=None):
+    def call(self, 
+             states, 
+             mask, 
+             test=False, 
+             init_state=None, 
+             map_state=None, 
+             curr_frames=None, 
+             aug=True, 
+             vision=None,
+             return_tokens=False
+             ):
+        
         """
         states:    [batch, 6, 10, 5]
         vision:    [batch, vision_dim] (ex.: 280 of CNN)
@@ -555,14 +602,28 @@ class RLEncoder(tf.keras.Model):
             mask = states[1]
             states = states[0]
 
+        hier_tokens = None
 
         if self.use_hier:
-            if test:
-                # print(states.get_shape(),map_state.get_shape())
-                states, val = self.h_layer(states, test, map_state, aug)
-                # return states,val
+            if return_tokens:
+                hier_out = self.h_layer(states,
+                                        test=test,
+                                        map_state=map_state,
+                                        aug=aug,
+                                        return_tokens=True)
+                states = hier_out["states"]
+                hier_tokens = {"actor_tokens": hier_out["actor_tokens"],
+                               "map_tokens": hier_out["map_tokens"],
+                               "actor_rel": hier_out["actor_rel"],
+                               "goal_tokens": hier_out["goal_tokens"],
+                               }
             else:
-                states = self.h_layer(states, test, map_state, aug)
+                if test:
+                    # print(states.get_shape(),map_state.get_shape())
+                    states, val = self.h_layer(states, test, map_state, aug, return_tokens=False)
+                    # return states,val
+                else:
+                    states = self.h_layer(states, test, map_state, aug, return_tokens=False)
 
         
         if self.use_vision and vision is not None:
@@ -610,6 +671,11 @@ class RLEncoder(tf.keras.Model):
             else:
                 raise RuntimeError(f"attention type unkown! {self.fusion_type}")
         #########################################################################################################################
+
+        if return_tokens:
+            return states, {"curr_frames": curr_frames,
+                            "hier_tokens": hier_tokens,
+                            }
         
         if self.use_map:
             return states, curr_frames 

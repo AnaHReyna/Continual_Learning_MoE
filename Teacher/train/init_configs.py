@@ -1,4 +1,5 @@
 import argparse
+from html import parser
 import yaml
 import sys
 sys.path.append('../')
@@ -8,7 +9,7 @@ def get_argument(parser=None):
     if parser is None:
         parser = argparse.ArgumentParser(conflict_handler='resolve')
     # experiment settings
-    parser.add_argument('--max-steps', type=int, default=150_000,
+    parser.add_argument('--max-steps', type=int, default=200_000,
                         help='Maximum number steps to interact with env.')
     parser.add_argument('--episode-max-steps', type=int, default=int(2500),
                         help='Maximum steps in an episode')
@@ -36,7 +37,7 @@ def get_argument(parser=None):
                         help='Interval to evaluate trained model')
     parser.add_argument('--show-test-progress', action='store_true',
                         help='Call `render` in evaluation process')
-    parser.add_argument('--test-episodes', type=int, default=100,
+    parser.add_argument('--test-episodes', type=int, default=500,
                         help='Number of episodes to evaluate at once')
     parser.add_argument('--save-test-path', action='store_true',
                         help='Save trajectories of evaluation')
@@ -44,6 +45,16 @@ def get_argument(parser=None):
                         help='Show input images to neural networks when an episode finishes')
     parser.add_argument('--save-test-movie', action='store_true',
                         help='Save rendering results')
+    
+    parser.add_argument('--save-eval-rollouts', action='store_true',
+                    help='Save trajectories from evaluation episodes')
+    parser.add_argument('--eval-rollout-dir', type=str, default=None,
+                    help='Directory to save evaluation trajectories')
+    
+    parser.add_argument('--save-only-success', action='store_true',
+                    help='Save only successful evaluation trajectories')
+
+
     # replay buffer
     parser.add_argument('--use-prioritized-rb', action='store_true', default=False,
                         help='Flag to use prioritized experience replay')
@@ -77,7 +88,8 @@ def get_argument(parser=None):
     # runner settings
     parser.add_argument('--skip-timestep', type=int, default=3, help='time step interval for actions')
 
-    parser.add_argument("--task", type=str, default="lane_keeping")
+    # parser.add_argument("--task", type=str, default="lane_keeping")
+    parser.add_argument("--task", type=str, default="lane_keeping", choices=["lane_keeping", "pedestrian", "change_lane"])
     parser.add_argument("--level", type=int, default=0)
     return parser
 
@@ -135,8 +147,10 @@ def set_off_policy_configs(args, test=False):
     algo_params = dict(params=encoding_params,
                         batch_size=args.batch_size, 
                         auto_alpha=True, 
-                        memory_capacity=int(2e4),
-                        n_warmup=5000, 
+                        # memory_capacity=int(2e4),
+                        memory_capacity= 20_000,
+                        # n_warmup=5000, 
+                        n_warmup=20_000,
                         lr=args.lr, #3e-4 for Drq
                         gpu=args.gpu,
                         discount=args.discount,

@@ -13,7 +13,6 @@ Town03_CARLA/
 
 envs/carla_route_env_old.py
 collect_carla_steering_dataset.py
-train_image_model.py
 train/train_iterations.py
 envs/carla_route_env_old.py
 export_rollouts/datasets
@@ -21,3 +20,16 @@ test/results
 train/lane_keeping
 train/pedestrian
 
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Teacher generated/heavy files
+Teacher/**/*.h5
+Teacher/**/*.hdf5
+Teacher/**/*.npy
+Teacher/**/*.npz
+Teacher/**/ckpt-*
+Teacher/**/events.out*
+Teacher/**/tb/

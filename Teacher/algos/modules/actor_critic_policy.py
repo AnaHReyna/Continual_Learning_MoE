@@ -155,27 +155,27 @@ class SAC_Critic(tf.keras.Model):
                             aug=True,
                             vision=None):
         
-        features,val = self.encoder(
-                                states,
-                                mask=mask, 
-                                test=test,
-                                init_state=init_state,
-                                map_state=map_state,
-                                aug=aug,
-                                vision=vision)
+        features,val = self.encoder(states,
+                                    mask=mask, 
+                                    test=test,
+                                    init_state=init_state,
+                                    map_state=map_state,
+                                    aug=aug,
+                                    vision=vision
+                                    )
         return features, val
     
 
-    def _get_pca_val(
-                    self,
-                    states,
-                    actions,
-                    mask=None, 
-                    test=True,
-                    init_state=None,
-                    map_state=None,
-                    aug=True,
-                    vision=None):
+    def _get_pca_val(self,
+                     states,
+                     actions,
+                     mask=None, 
+                     test=True,
+                     init_state=None,
+                     map_state=None,
+                     aug=True,
+                     vision=None
+                     ):
         
         feat,_ = self.encoder(
                             states,
@@ -212,8 +212,7 @@ class SAC_Actor(tf.keras.Model):
     LOG_STD_CAP_MIN = -20  # np.e**-10 = 4.540e-05
     EPS = 1e-6
 
-    def __init__(
-                self,
+    def __init__(self,
                 params,
                 state_shape,
                 action_dim, 
@@ -223,7 +222,8 @@ class SAC_Actor(tf.keras.Model):
                 state_independent_std=False,
                 squash=True,
                 drop_rate=0.1,
-                ensembles=False):
+                ensembles=False
+                ):
         
         super().__init__(name=name)
 
@@ -238,13 +238,16 @@ class SAC_Actor(tf.keras.Model):
 
         self.out_mean = layers.Dense(action_dim, name="L_mean")
         if self._state_independent_std:
-            self.out_logstd = tf.Variable(
-                initial_value=-0.5 * np.ones(action_dim, dtype=np.float32),
-                dtype=tf.float32, name="L_logstd")
+            self.out_logstd = tf.Variable(initial_value=-0.5 * np.ones(action_dim, dtype=np.float32),
+                                          dtype=tf.float32, 
+                                          name="L_logstd"
+                                          )
         else:
             self.out_logstd = layers.Dense(action_dim, name="L_logstd")
+
         self.actor_layers = [layers.Dense(128, activation=hidden_activation),
-                             layers.Dense(32, activation=hidden_activation)]
+                             layers.Dense(32, activation=hidden_activation)
+                            ]
         
         dummy_state = tf.constant(np.zeros(shape=state_shape, dtype=np.float32))
         dummy_action = tf.constant(np.zeros(shape=(1,) + (action_dim,), dtype=np.float32))
@@ -265,24 +268,27 @@ class SAC_Actor(tf.keras.Model):
         self(dummy_state)
         self.summary()
     
-    def call(self, state, test=False):
+    def call(self, state, test=False, return_stats=False):
         features = tf.stop_gradient(state)
 
         for layer in self.actor_layers:
             features = layer(features)
+
         mean = self.out_mean(features)
 
         if self._state_independent_std:
-            log_std = tf.tile(
-                input=tf.expand_dims(self.out_logstd, axis=0),
-                multiples=[mean.shape[0], 1])
+            log_std = tf.tile(input=tf.expand_dims(self.out_logstd, axis=0),
+                              multiples=[mean.shape[0], 1]
+                              )
         else:
             log_std = self.out_logstd(features)
             log_std = tf.clip_by_value(log_std, self.LOG_STD_CAP_MIN, self.LOG_STD_CAP_MAX)
-            std = tf.exp(log_std)
+
+        std = tf.exp(log_std)
 
         if self.use_map:
             mean = tf.reduce_mean(mean, axis=1)
+            log_std = tf.reduce_mean(log_std, axis=1)
             std = tf.reduce_mean(std, axis=1)
                 
         dist =  tfp.distributions.MultivariateNormalDiag(loc=mean, scale_diag=std)
@@ -291,6 +297,7 @@ class SAC_Actor(tf.keras.Model):
             raw_actions = dist.mean()
         else:
             raw_actions = dist.sample()
+
         log_pis = dist.log_prob(raw_actions)
         entropy = dist.entropy()
 
@@ -302,6 +309,14 @@ class SAC_Actor(tf.keras.Model):
             actions = raw_actions
 
         actions = actions * self._max_action
+
+        if self._squash:
+            mean_action = tf.tanh(mean) * self._max_action
+        else:
+            mean_action = mean * self._max_action
+
+        if return_stats:
+            return actions, log_pis, entropy, mean, log_std, mean_action
 
         return actions, log_pis, entropy
     
