@@ -1,0 +1,441 @@
+
+====================================================================================================
+results/baselines/FT_no_replay_pedestrian/run_config.json
+====================================================================================================
+all_dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo']
+dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo']
+geo_dim: 8
+geo_type: mlp
+init_ckpt: /home/ana/Documents/Architecture_Transformers_SR/student/Arquitetura/Resultados/stage1/stage1_moe_lane_change_ckpt20/ckpt-20
+init_new_expert_from_old_avg: False
+int_contrastive_temp: 0.1
+int_contrastive_weight: 0.0
+int_dim: 8
+interaction_type: mlp
+mode_contrastive_temp: 0.1
+mode_contrastive_weight: 0.0
+new_expert_noise_std: 0.001
+num_new_experts: 1
+num_old_experts: 2
+phase: 1
+replay_dirs: []
+restored_ckpt: /home/ana/Documents/Architecture_Transformers_SR/student/Arquitetura/Resultados/stage1/stage1_moe_lane_change_ckpt20/ckpt-20
+router_balance_final_weight: 0.0
+router_balance_initial_weight: 0.0
+router_balance_warmup_epochs: 0
+router_balance_weight: 0.0
+router_entropy_final_weight: 0.0
+router_entropy_initial_weight: 0.0
+router_entropy_warmup_epochs: 0
+router_entropy_weight: 0.0
+speed_weight: 1.0
+start_time: 2026-06-09T22:43:26.216172
+steer_weight: 2.0
+student_fusion_type: cross
+student_target_mode: mean_action
+student_use_vision: False
+student_vision_dim: 280
+task_alignment_weight: 0.0
+task_contrastive_temp: 0.1
+task_contrastive_weight: 0.0
+task_dim: 16
+task_mapping: {
+  "pedestrian": 0
+}
+teacher_task_prototypes: None
+use_geo: False
+use_int: False
+use_int_contrastive: False
+use_mode_contrastive: False
+use_task_alignment: False
+use_task_contrastive: False
+
+====================================================================================================
+results/stage1/stage1_moe_lane_change_ckpt20/run_config.json
+====================================================================================================
+dataset_dirs: ['../../export_rollouts/datasets/lane_keeping', '../../export_rollouts/datasets/change_lane_eval']
+expert_diversity_ramp_epochs: 10
+expert_diversity_warmup_epochs: 5
+expert_diversity_weight: 0.0005
+num_experts: 2
+router_balance_weight: 0.01
+router_entropy_weight: 0.0
+start_time: 2026-06-02T16:18:16.961495
+student_fusion_type: cross
+student_target_mode: mean_action
+student_use_vision: False
+student_vision_dim: 280
+task_alignment_weight: 0.01
+task_contrastive_temp: 0.1
+task_contrastive_weight: 0.01
+task_dim: 16
+task_mapping: {
+  "lane_keeping": 0,
+  "change_lane": 1
+}
+teacher_task_prototypes: teacher_task_prototypes/teacher_task_prototypes.npz
+use_task_alignment: True
+use_task_contrastive: True
+
+====================================================================================================
+results/stage2/phase1/FT/run_config.json
+====================================================================================================
+all_dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo', '../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo']
+geo_dim: 8
+geo_type: mlp
+init_ckpt: Resultados/stage1/checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+int_contrastive_temp: 0.1
+int_contrastive_weight: 0.0
+int_dim: 8
+interaction_type: mlp
+mode_contrastive_temp: 0.1
+mode_contrastive_weight: 0.0
+num_new_experts: 1
+num_old_experts: 2
+phase: 1
+replay_dirs: ['../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+restored_ckpt: Resultados/stage1/checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+router_balance_weight: 0.01
+router_entropy_weight: 0.0
+speed_weight: 1.0
+start_time: 2026-06-05T01:12:30.662292
+steer_weight: 2.0
+student_fusion_type: cross
+student_target_mode: mean_action
+student_use_vision: False
+student_vision_dim: 280
+task_contrastive_temp: 0.1
+task_contrastive_weight: 0.0
+task_dim: 16
+task_mapping: {
+  "pedestrian": 0,
+  "lane_keeping": 1,
+  "change_lane": 2
+}
+use_geo: False
+use_int: False
+use_int_contrastive: False
+use_mode_contrastive: False
+use_task_contrastive: False
+
+====================================================================================================
+results/stage2/phase1/GeoInt/run_config.json
+====================================================================================================
+all_dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo', '../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo']
+geo_dim: 8
+geo_type: mlp
+init_ckpt: checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+int_contrastive_temp: 0.1
+int_contrastive_weight: 0.0
+int_dim: 8
+interaction_type: mlp
+mode_contrastive_temp: 0.1
+mode_contrastive_weight: 0.0
+num_new_experts: 1
+num_old_experts: 2
+phase: 1
+replay_dirs: ['../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+restored_ckpt: checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+router_balance_weight: 0.01
+router_entropy_weight: 0.0
+speed_weight: 1.0
+start_time: 2026-06-04T02:18:11.075687
+steer_weight: 2.0
+student_fusion_type: cross
+student_target_mode: mean_action
+student_use_vision: False
+student_vision_dim: 280
+task_contrastive_temp: 0.1
+task_contrastive_weight: 0.0
+task_dim: 16
+task_mapping: {
+  "pedestrian": 0,
+  "lane_keeping": 1,
+  "change_lane": 2
+}
+use_int_contrastive: False
+use_mode_contrastive: False
+use_task_contrastive: False
+
+====================================================================================================
+results/stage2/phase1/Ours/run_config.json
+====================================================================================================
+all_dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo', '../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo']
+geo_dim: 8
+geo_type: cross_attn
+init_ckpt: Resultados/stage1/checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+init_new_expert_from_old_avg: True
+int_contrastive_temp: 0.1
+int_contrastive_weight: 0.003
+int_dim: 8
+interaction_type: cross_attn
+mode_contrastive_temp: 0.1
+mode_contrastive_weight: 0.005
+new_expert_noise_std: 0.001
+new_task_name: pedestrian
+new_task_old_expert_penalty_weight: 0.02
+num_new_experts: 1
+num_old_experts: 2
+old_task_new_expert_penalty_weight: 0.05
+phase: 1
+replay_dirs: ['../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+restored_ckpt: Resultados/stage1/checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+router_balance_final_weight: 0.01
+router_balance_initial_weight: 0.05
+router_balance_warmup_epochs: 20
+router_balance_weight: 0.01
+router_entropy_final_weight: 0.0
+router_entropy_initial_weight: 0.005
+router_entropy_warmup_epochs: 20
+router_entropy_weight: 0.0
+router_new_task_id: 0
+speed_weight: 1.0
+start_time: 2026-06-06T19:32:54.998447
+steer_weight: 2.0
+student_fusion_type: cross
+student_target_mode: mean_action
+student_use_vision: False
+student_vision_dim: 280
+task_alignment_weight: 0.01
+task_contrastive_temp: 0.1
+task_contrastive_weight: 0.005
+task_dim: 16
+task_mapping: {
+  "pedestrian": 0,
+  "lane_keeping": 1,
+  "change_lane": 2
+}
+teacher_task_prototypes: teacher_task_prototypes/teacher_task_prototypes_stage2.npz
+use_geo: True
+use_int: True
+use_int_contrastive: True
+use_mode_contrastive: True
+use_task_alignment: True
+use_task_contrastive: True
+
+====================================================================================================
+results/stage2/phase1/Proto_AW/run_config.json
+====================================================================================================
+all_dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo', '../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo']
+geo_dim: 8
+geo_type: mlp
+init_ckpt: Resultados/stage1/checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+init_new_expert_from_old_avg: True
+int_contrastive_temp: 0.1
+int_contrastive_weight: 0.0
+int_dim: 8
+interaction_type: mlp
+mode_contrastive_temp: 0.1
+mode_contrastive_weight: 0.0
+new_expert_noise_std: 0.001
+num_new_experts: 1
+num_old_experts: 2
+phase: 1
+replay_dirs: ['../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+restored_ckpt: Resultados/stage1/checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+router_balance_final_weight: 0.01
+router_balance_initial_weight: 0.05
+router_balance_warmup_epochs: 20
+router_balance_weight: 0.01
+router_entropy_final_weight: 0.0
+router_entropy_initial_weight: 0.005
+router_entropy_warmup_epochs: 20
+router_entropy_weight: 0.0
+speed_weight: 1.0
+start_time: 2026-06-05T11:01:45.870305
+steer_weight: 2.0
+student_fusion_type: cross
+student_target_mode: mean_action
+student_use_vision: False
+student_vision_dim: 280
+task_alignment_weight: 0.01
+task_contrastive_temp: 0.1
+task_contrastive_weight: 0.005
+task_dim: 16
+task_mapping: {
+  "pedestrian": 0,
+  "lane_keeping": 1,
+  "change_lane": 2
+}
+teacher_task_prototypes: teacher_task_prototypes/teacher_task_prototypes_stage2.npz
+use_geo: False
+use_int: False
+use_int_contrastive: False
+use_mode_contrastive: False
+use_task_alignment: True
+use_task_contrastive: True
+
+====================================================================================================
+results/stage2/phase1/Proto_RP/run_config.json
+====================================================================================================
+all_dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo', '../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo']
+geo_dim: 8
+geo_type: mlp
+init_ckpt: Resultados/stage1/checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+init_new_expert_from_old_avg: True
+int_contrastive_temp: 0.1
+int_contrastive_weight: 0.0
+int_dim: 8
+interaction_type: mlp
+mode_contrastive_temp: 0.1
+mode_contrastive_weight: 0.0
+new_expert_noise_std: 0.001
+new_task_name: pedestrian
+new_task_old_expert_penalty_weight: 0.02
+num_new_experts: 1
+num_old_experts: 2
+old_task_new_expert_penalty_weight: 0.05
+phase: 1
+replay_dirs: ['../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+restored_ckpt: Resultados/stage1/checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20
+router_balance_final_weight: 0.01
+router_balance_initial_weight: 0.05
+router_balance_warmup_epochs: 20
+router_balance_weight: 0.01
+router_entropy_final_weight: 0.0
+router_entropy_initial_weight: 0.005
+router_entropy_warmup_epochs: 20
+router_entropy_weight: 0.0
+router_new_task_id: 0
+speed_weight: 1.0
+start_time: 2026-06-06T10:43:45.715054
+steer_weight: 2.0
+student_fusion_type: cross
+student_target_mode: mean_action
+student_use_vision: False
+student_vision_dim: 280
+task_alignment_weight: 0.01
+task_contrastive_temp: 0.1
+task_contrastive_weight: 0.005
+task_dim: 16
+task_mapping: {
+  "pedestrian": 0,
+  "lane_keeping": 1,
+  "change_lane": 2
+}
+teacher_task_prototypes: teacher_task_prototypes/teacher_task_prototypes_stage2.npz
+use_geo: False
+use_int: False
+use_int_contrastive: False
+use_mode_contrastive: False
+use_task_alignment: True
+use_task_contrastive: True
+
+====================================================================================================
+results/stage2/phase2/Ours_ckpt20/run_config.json
+====================================================================================================
+all_dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo', '../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo']
+geo_dim: 8
+geo_type: cross_attn
+init_ckpt: /home/ana/Documents/Architecture_Transformers_SR/student/Arquitetura/Resultados/phase1/Ours
+init_new_expert_from_old_avg: False
+int_contrastive_temp: 0.1
+int_contrastive_weight: 0.001
+int_dim: 8
+interaction_type: cross_attn
+mode_contrastive_temp: 0.1
+mode_contrastive_weight: 0.001
+new_expert_noise_std: 0.001
+new_task_name: pedestrian
+new_task_old_expert_penalty_weight: 0.04
+num_new_experts: 1
+num_old_experts: 2
+old_task_new_expert_penalty_weight: 0.02
+phase: 2
+replay_dirs: ['../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+restored_ckpt: /home/ana/Documents/Architecture_Transformers_SR/student/Arquitetura/Resultados/phase1/Ours/ckpt-20
+router_balance_final_weight: 0.005
+router_balance_initial_weight: 0.005
+router_balance_warmup_epochs: 0
+router_balance_weight: 0.005
+router_entropy_final_weight: 0.0
+router_entropy_initial_weight: 0.0
+router_entropy_warmup_epochs: 0
+router_entropy_weight: 0.0
+router_new_task_id: 0
+speed_weight: 1.0
+start_time: 2026-06-07T18:14:11.012416
+steer_weight: 2.0
+student_fusion_type: cross
+student_target_mode: mean_action
+student_use_vision: False
+student_vision_dim: 280
+task_alignment_weight: 0.01
+task_contrastive_temp: 0.1
+task_contrastive_weight: 0.005
+task_dim: 16
+task_mapping: {
+  "pedestrian": 0,
+  "lane_keeping": 1,
+  "change_lane": 2
+}
+teacher_task_prototypes: teacher_task_prototypes/teacher_task_prototypes_stage2.npz
+use_geo: True
+use_int: True
+use_int_contrastive: True
+use_mode_contrastive: True
+use_task_alignment: True
+use_task_contrastive: True
+
+====================================================================================================
+results/stage2/phase2/Proto-AW_ckpt14/run_config.json
+====================================================================================================
+all_dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo', '../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+dataset_dirs: ['../../export_rollouts/datasets/pedestrian_antigo']
+geo_dim: 8
+geo_type: mlp
+init_ckpt: /home/ana/Documents/Architecture_Transformers_SR/student/Arquitetura/Resultados/phase1/Proto_AW/ckpt-14
+init_new_expert_from_old_avg: False
+int_contrastive_temp: 0.1
+int_contrastive_weight: 0.0
+int_dim: 8
+interaction_type: mlp
+mode_contrastive_temp: 0.1
+mode_contrastive_weight: 0.0
+new_expert_noise_std: 0.001
+new_task_name: pedestrian
+new_task_old_expert_penalty_weight: 0.0
+num_new_experts: 1
+num_old_experts: 2
+old_task_new_expert_penalty_weight: 0.0
+phase: 2
+replay_dirs: ['../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve', '../../export_rollouts/datasets/change_lane_replay_10pct_success']
+restored_ckpt: /home/ana/Documents/Architecture_Transformers_SR/student/Arquitetura/Resultados/phase1/Proto_AW/ckpt-14
+router_balance_final_weight: 0.005
+router_balance_initial_weight: 0.005
+router_balance_warmup_epochs: 0
+router_balance_weight: 0.005
+router_entropy_final_weight: 0.0
+router_entropy_initial_weight: 0.0
+router_entropy_warmup_epochs: 0
+router_entropy_weight: 0.0
+router_new_task_id: 0
+speed_weight: 1.0
+start_time: 2026-06-08T12:25:25.314204
+steer_weight: 2.0
+student_fusion_type: cross
+student_target_mode: mean_action
+student_use_vision: False
+student_vision_dim: 280
+task_alignment_weight: 0.01
+task_contrastive_temp: 0.1
+task_contrastive_weight: 0.005
+task_dim: 16
+task_mapping: {
+  "pedestrian": 0,
+  "lane_keeping": 1,
+  "change_lane": 2
+}
+teacher_task_prototypes: teacher_task_prototypes/teacher_task_prototypes_stage2.npz
+use_geo: False
+use_int: False
+use_int_contrastive: False
+use_mode_contrastive: False
+use_task_alignment: True
+use_task_contrastive: True

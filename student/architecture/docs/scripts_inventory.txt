@@ -1,0 +1,16 @@
+scripts/00_setup/env.sh
+scripts/01_stage1/train_stage1_lk_cl.sh
+scripts/02_prototypes/analyze_teacher_prototypes_stage1.sh
+scripts/02_prototypes/analyze_teacher_prototypes_stage2.sh
+scripts/02_prototypes/build_teacher_prototypes_stage1.sh
+scripts/02_prototypes/build_teacher_prototypes_stage2.sh
+scripts/02_prototypes/train_teacher_encoder_stage1.sh
+scripts/02_prototypes/train_teacher_encoder_stage2.sh
+scripts/03_stage2_phase1/train_phase1_FT.sh
+scripts/03_stage2_phase1/train_phase1_GeoInt.sh
+scripts/03_stage2_phase1/train_phase1_Ours.sh
+scripts/03_stage2_phase1/train_phase1_Proto_AW.sh
+scripts/03_stage2_phase1/train_phase1_Proto_RP.sh
+scripts/04_stage2_phase2/train_phase2_Ours_ckpt20.sh
+scripts/04_stage2_phase2/train_phase2_Proto_AW_ckpt14.sh
+scripts/05_evaluation/eval_all_existing_results.sh

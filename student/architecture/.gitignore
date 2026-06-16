@@ -1,0 +1,62 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+*~
+.~lock*
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Backups generated during code organization
+*.bak
+*.bak_*
+*.backup
+
+# TensorBoard / TensorFlow event files
+events.out.tfevents.*
+
+# Large checkpoints / TensorFlow checkpoint shards
+**/checkpoint
+**/ckpt-*
+!docs/checkpoints_inventory.txt
+
+# Training embeddings and generated binary analysis files
+results/**/embeddings/
+results/**/*.npz
+teacher_task_prototypes/*.npz
+teacher_task_prototypes_stage2/*.npz
+teacher_task_prototypes/*.json
+teacher_task_prototypes_stage2/*.json
+
+# CARLA reproduced evaluation outputs
+# Official compact summaries can be documented in docs/.
+test_CARLA/Resultados_reproduced/
+test_CARLA/Resultados_smoke/
+
+# Large model binaries
+*.h5
+*.hdf5
+*.pb
+*.onnx
+*.pt
+*.pth
+
+# Temporary archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+
+# Generated graphics
+test_CARLA/graphics/**/figures/
+test_CARLA/graphics/**/archive/

@@ -1,0 +1,538 @@
+### STAGE 1 COMMANDS ###
+                   }, 
+                   f, 
+                   indent=2
+                   )
+
+
+if __name__ == "__main__":
+    main()
+
+
+# python train_student_moe.py \
+#   --dataset-dirs ../export_rollouts/datasets/lane_keeping \
+#   --student-logdir checkpoints \
+#   --student-name stage1_moe_lane_steer2 \
+#   --student-epochs 60 \
+#   --student-batch-size 64 \
+#   --student-lr 1e-4 \
+#   --student-target-mode mean_action \
+#   --num-experts 2 \
+#   --task-dim 16 \
+#   --router-balance-weight 0.01
+#   --steer-weight 2.0 \
+#   --speed-weight 1.0
+#######################################################################
+# python train_student_moe.py \
+#   --dataset-dirs ../../export_rollouts/datasets/lane_keeping \
+#   --student-logdir checkpoints_div \
+#   --student-name stage1_moe_lane_div \
+#   --student-epochs 100 \
+#   --student-batch-size 64 \
+#   --student-lr 1e-4 \
+#   --student-target-mode mean_action \
+#   --num-experts 2 \
+#   --task-dim 16 \
+#   --router-balance-weight 0.01 \
+#   --steer-weight 2.0 \
+#   --speed-weight 1.0 \
+#   --expert-diversity-weight 0.0005 \
+#   --expert-diversity-warmup-epochs 5 \
+#   --expert-diversity-ramp-epochs 10
+######################################################################################
+# python train_student_moe.py \
+#   --dataset-dirs ../../export_rollouts/datasets/lane_keeping_eval ../../export_rollouts/datasets/change_lane_eval \
+#   --teacher-task-prototypes teacher_task_prototypes/teacher_task_prototypes.npz \
+#   --student-logdir checkpoints_stage1_multitask \
+#   --student-name stage1_moe_lane_change \
+#   --student-epochs 200 \
+#   --student-batch-size 64 \
+#   --student-lr 1e-4 \
+#   --student-target-mode mean_action \
+#   --num-experts 2 \
+#   --task-dim 16 \
+#   --router-balance-weight 0.01 \
+#   --steer-weight 2.0 \
+#   --speed-weight 1.0 \
+#   --expert-diversity-weight 0.0005 \
+#   --expert-diversity-warmup-epochs 5 \
+#   --expert-diversity-ramp-epochs 10 \
+#   --use-task-contrastive \
+#   --task-contrastive-weight 0.01 \
+#   --task-contrastive-temp 0.1 \
+#   --use-task-alignment \
+#   --task-alignment-weight 0.01
+####################################################################################################
+# python train_student_moe.py \
+#   --dataset-dirs ../../export_rollouts/datasets/lane_keeping ../../export_rollouts/datasets/change_lane_eval \
+#   --teacher-task-prototypes teacher_task_prototypes/teacher_task_prototypes.npz \
+#   --student-logdir checkpoints_stage1_multitask \
+#   --student-name stage1_moe_lane_change \
+#   --student-epochs 200 \
+#   --student-batch-size 64 \
+#   --student-lr 1e-4 \
+#   --student-save-every 10 \
+#   --student-target-mode mean_action \
+#   --num-experts 2 \
+#   --task-dim 16 \
+#   --router-balance-weight 0.01 \
+#   --steer-weight 2.0 \
+#   --speed-weight 1.0 \
+#   --expert-diversity-weight 0.0005 \
+#   --expert-diversity-warmup-epochs 5 \
+
+### STAGE 2 COMMANDS ###
+                   "router_entropy_final_weight": args.router_entropy_final_weight,
+                   "router_entropy_warmup_epochs": args.router_entropy_warmup_epochs,
+                   }, 
+                   f, 
+                   indent=2
+                  )
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+# python train_student_moe_stage2.py \
+#   --dataset-dirs ../../export_rollouts/datasets/pedestrian \
+#   --replay-dirs ../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve \
+#   --init-ckpt ../baseline_obs/checkpoints/stage1_moe_lane_steer2/ckpt-5 \
+#   --phase 1 \
+#   --student-logdir checkpoints_zint \
+#   --student-name stage2_moe_ped_phase1_zint \
+#   --student-epochs 80 \
+#   --student-batch-size 64 \
+#   --student-lr 1e-4 \
+#   --student-target-mode mean_action \
+#   --num-old-experts 2 \
+#   --num-new-experts 1 \
+#   --task-dim 16 \
+#   --mode-dim 8 \
+#   --int-dim 8 \
+#   --interaction-type cross_attn \
+#   --router-balance-weight 0.01 \
+#   --speed-weight 1.0 \
+#   --steer-weight 2.0
+
+
+
+# python train_student_moe_stage2.py \
+#   --dataset-dirs ../../export_rollouts/datasets/pedestrian \
+#   --replay-dirs ../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve \
+#   --init-ckpt checkpoints_zint/stage2_moe_ped_phase1_zint/ckpt-10 \
+#   --phase 2 \
+#   --student-logdir checkpoints_zint \
+#   --student-name stage2_moe_ped_phase2_zint \
+#   --student-epochs 80 \
+#   --student-batch-size 64 \
+#   --student-lr 5e-5 \
+#   --student-target-mode mean_action \
+#   --num-old-experts 3 \
+#   --num-new-experts 0 \
+#   --task-dim 16 \
+#   --mode-dim 8 \
+#   --int-dim 8 \
+#   --router-balance-weight 0.02 \
+#   --router-entropy-weight 0.001 \
+#   --speed-weight 1.0 \
+#   --steer-weight 2.0 \
+#   --use-mode-contrastive \
+#   --mode-contrastive-weight 0.01 \
+#   --mode-contrastive-temp 0.1 \
+#   --use-task-contrastive \
+#   --task-contrastive-weight 0.01 \
+#   --task-contrastive-temp 0.1 \
+#   --use-int-contrastive \
+#   --int-contrastive-weight 0.01 \
+#   --int-contrastive-temp 0.1
+###################################################################################################
+# Phase1
+# python train_student_moe_stage2.py \
+#   --dataset-dirs ../../export_rollouts/datasets/pedestrian \
+#   --replay-dirs ../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve \
+#   --init-ckpt ../baseline_obs/checkpoints/stage1_moe_lane_steer2/ckpt-5 \
+#   --phase 1 \
+#   --student-logdir checkpoints_zgeo_zint \
+#   --student-name stage2_moe_ped_phase1_geo_int \
+#   --student-epochs 80 \
+#   --student-batch-size 64 \
+#   --student-lr 1e-4 \
+#   --student-target-mode mean_action \
+#   --num-old-experts 2 \
+#   --num-new-experts 1 \
+#   --task-dim 16 \
+#   --geo-dim 8 \
+#   --int-dim 8 \
+#   --geo-type cross_attn \
+#   --interaction-type cross_attn \
+#   --router-balance-weight 0.01 \
+#   --speed-weight 1.0 \
+#   --steer-weight 2.0 \
+#   --use-task-contrastive \
+#   --task-contrastive-weight 0.01 \
+#   --task-contrastive-temp 0.1 \
+#   --use-mode-contrastive \
+#   --mode-contrastive-weight 0.01 \
+#   --mode-contrastive-temp 0.1 \
+#   --use-int-contrastive \
+#   --int-contrastive-weight 0.005 \
+#   --int-contrastive-temp 0.1
+
+############################################################################################################
+# Phase2
+# python3 train_student_moe_stage2.py \
+#   --dataset-dirs ../../export_rollouts/datasets/pedestrian \
+#   --replay-dirs ../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve \
+#   --init-ckpt checkpoints_zgeo_zint/stage2_moe_ped_phase1_geo_int/ckpt-16 \
+#   --phase 2 \
+#   --student-logdir checkpoints_zgeo_zint \
+#   --student-name stage2_moe_ped_phase2_geo_int \
+#   --student-epochs 100 \
+#   --student-batch-size 64 \
+#   --student-lr 5e-5 \
+#   --student-target-mode mean_action \
+#   --num-old-experts 3 \
+#   --num-new-experts 0 \
+#   --task-dim 16 \
+#   --geo-dim 8 \
+#   --int-dim 8 \
+#   --geo-type cross_attn \
+#   --interaction-type cross_attn \
+#   --router-balance-weight 0.02 \
+#   --router-entropy-weight 0.001 \
+#   --speed-weight 1.0 \
+#   --steer-weight 2.0 \
+#   --use-task-contrastive \
+#   --task-contrastive-weight 0.01 \
+#   --task-contrastive-temp 0.1 \
+#   --use-mode-contrastive \
+#   --mode-contrastive-weight 0.01 \
+#   --mode-contrastive-temp 0.1 \
+#   --use-int-contrastive \
+#   --int-contrastive-weight 0.01 \
+#   --int-contrastive-temp 0.1
+######################################################################################################################
+#ETAPA2 PHASE1 WITH GEO AND INT
+#######################################################################################################################
+# python train_student_moe_stage2.py \
+#   --dataset-dirs ../../export_rollouts/datasets/pedestrian_antigo \
+#   --replay-dirs ../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve ../../export_rollouts/datasets/change_lane_replay_10pct_success \
+#   --init-ckpt checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20 \
+#   --phase 1 \
+#   --student-logdir checkpoints_stage2_multitask \
+#   --student-name stage2_moe_ped_phase1_noprot_no_geoint \
+#   --student-epochs 100 \
+#   --student-batch-size 64 \
+#   --student-lr 1e-4 \
+#   --student-target-mode mean_action \
+#   --num-old-experts 2 \
+#   --num-new-experts 1 \
+#   --task-dim 16 \
+#   --router-balance-weight 0.01 \
+#   --speed-weight 1.0 \
+#   --steer-weight 2.0
+##########################################################################################################################
+# ETAPA2 PHASE1 WITHOUT GEO AND INT
+#########################################################################################################################
+# python train_student_moe_stage2.py \
+#   --dataset-dirs ../../export_rollouts/datasets/pedestrian_antigo \
+#   --replay-dirs ../../export_rollouts/datasets/lane_keeping_replay_10pct_success_curve ../../export_rollouts/datasets/change_lane_replay_10pct_success \
+#   --init-ckpt Resultados/checkpoints_stage1_multitask/stage1_moe_lane_change/ckpt-20 \
+#   --phase 1 \
+#   --student-logdir Resultados/checkpoints_stage2_multitask \
+#   --student-name stage2_moe_ped_phase1_noprot_no_geoint \
+#   --student-epochs 100 \
+#   --student-batch-size 64 \
+#   --student-lr 1e-4 \
+#   --student-target-mode mean_action \
+#   --num-old-experts 2 \
+#   --num-new-experts 1 \
+#   --task-dim 16 \
+#   --router-balance-weight 0.01 \
+#   --speed-weight 1.0 \
+#   --steer-weight 2.0
+### TEACHER TASK ENCODER COMMANDS ###
+
+
+if __name__ == "__main__":
+    main()
+
+
+# python train_teacher_task_encoder.py \
+#   --dataset-dirs ../../export_rollouts/datasets/lane_keeping ../../export_rollouts/datasets/change_lane_eval \
+#   --outdir teacher_task_encoder_ckpts \
+#   --window-len 20 \
+#   --stride 10 \
+#   --batch-size 64 \
+#   --epochs 100 \
+#   --lr 1e-4 \
+#   --action-source teacher_mean_action \
+#   --reward-key rew \
+#   --balance-tasks \
+#   --model-dim 128 \
+#   --num-heads 4 \
+#   --ff-dim 256 \
+#   --num-layers 2 \
+#   --task-emb-dim 16 \
+#   --dropout 0.1 \
+#   --temperature 0.1 \
+#   --use-cls-token
+
+##################################################################################
+
+# python train_teacher_task_encoder.py \
+#   --dataset-dirs ../../export_rollouts/datasets/lane_keeping ../../export_rollouts/datasets/change_lane_eval ../../export_rollouts/datasets/pedestrian \
+#   --outdir teacher_task_encoder_ckpts_stage2 \
+#   --window-len 20 \
+#   --stride 10 \
+#   --batch-size 64 \
+#   --epochs 100 \
+#   --lr 1e-4 \
+#   --action-source teacher_mean_action \
+#   --reward-key rew \
+#   --balance-tasks \
+#   --model-dim 128 \
+#   --num-heads 4 \
+
+### BUILD TEACHER PROTOTYPES COMMANDS ###
+    print("Prototype shape:", prototypes_np.shape)
+
+
+if __name__ == "__main__":
+    main()
+
+# python build_teacher_task_prototypes.py \
+#   --dataset-dirs ../../export_rollouts/datasets/lane_keeping ../../export_rollouts/datasets/change_lane_eval \
+#   --ckpt-dir teacher_task_encoder_ckpts \
+#   --ckpt-id ckpt-20 \
+#   --outdir teacher_task_prototypes \
+#   --window-len 20 \
+#   --stride 10 \
+#   --batch-size 64 \
+#   --action-source teacher_mean_action \
+#   --reward-key rew \
+#   --model-dim 128 \
+#   --num-heads 4 \
+#   --ff-dim 256 \
+#   --num-layers 2 \
+#   --task-emb-dim 16 \
+#   --dropout 0.1 \
+#   --use-cls-token \
+#   --save-window-embeddings
+
+###########################################################################################################################
+# python build_teacher_task_prototypes.py \
+#   --dataset-dirs ../../export_rollouts/datasets/lane_keeping ../../export_rollouts/datasets/change_lane_eval ../../export_rollouts/datasets/pedestrian \
+#   --ckpt-dir teacher_task_encoder_ckpts_stage2 \
+#   --ckpt-id ckpt-20 \
+#   --outdir teacher_task_prototypes_stage2 \
+#   --window-len 20 \
+#   --stride 10 \
+#   --batch-size 64 \
+#   --action-source teacher_mean_action \
+#   --reward-key rew \
+
+### ANALYZE PROTOTYPES COMMANDS ###
+    print("Mean wrong l2:", float(wrong_l2.mean()))
+    print("Prototype cosine similarity matrix:\n", proto_cos)
+
+
+if __name__ == "__main__":
+    main()
+
+
+# python analyze_teacher_task_prototypes.py \
+#   --proto-npz teacher_task_prototypes/teacher_task_prototypes.npz \
+#   --window-npz teacher_task_prototypes/teacher_window_embeddings.npz \
+#   --outdir teacher_task_analysis
+### ANALYZE PROTOTYPES LOO COMMANDS ###
+    print("Mean wrong l2:", float(wrong_l2_vals.mean()))
+    print("Mean l2 margin:", float(l2_margins.mean()))
+
+
+if __name__ == "__main__":
+    main()
+
+# python analyze_teacher_task_prototypes_loo.py \
+#   --proto-npz teacher_task_prototypes/teacher_task_prototypes.npz \
+#   --window-npz teacher_task_prototypes/teacher_window_embeddings.npz \
+#   --outdir teacher_task_analysis_loo
+### EVALUATION SINGLE TASK COMMANDS ###
+    print("\nSaved evaluation to:", args.eval_outdir)
+
+
+if __name__ == "__main__":
+    main()
+
+
+# python evaluate_student_single_task_carla.py \
+#   --model-type stage2_moe \
+#   --ckpt-dir ../checkpoints/stage2_moe_ped_phase2_curve_taskmode_ctr \
+#   --ckpt-ids ckpt-14 \
+#   --task lane_keeping \
+#   --eval-episodes 5 \
+#   --eval-outdir eval_lane_ckpt14 \
+#   --task-dim 16 \
+#   --mode-dim 8 \
+#   --num-old-experts 3 \
+#   --num-new-experts 0 \
+#   --level 3
+
+
+# python evaluate_student_single_task_carla.py \
+#   --model-type stage2_moe \
+#   --ckpt-dir ../checkpoints/stage2_moe_ped_phase2_curve_taskmode_ctr \
+#   --ckpt-ids ckpt-14 \
+#   --task pedestrian \
+#   --eval-episodes 5 \
+#   --eval-outdir eval_ped_ckpt14 \
+#   --task-dim 16 \
+#   --mode-dim 8 \
+#   --num-old-experts 3 \
+#   --num-new-experts 0 \
+#   --level 3
+###########################################################################
+#Phase1
+# python evaluate_student_single_task_carla.py \
+#   --model-type stage2_moe \
+#   --ckpt-dir ../checkpoints_zgeo_zint/stage2_moe_ped_phase1_geo_int \
+#   --ckpt-ids ckpt-10 \
+#   --task lane_keeping \
+#   --eval-episodes 50 \
+#   --eval-outdir eval_phase1_lane \
+#   --task-dim 16 \
+#   --geo-dim 8 \
+#   --int-dim 8 \
+#   --geo-type cross_attn \
+#   --interaction-type cross_attn \
+#   --num-old-experts 2 \
+#   --num-new-experts 1 \
+#   --level 3
+
+
+# python evaluate_student_single_task_carla.py \
+#   --model-type stage2_moe \
+#   --ckpt-dir ../checkpoints_zgeo_zint/stage2_moe_ped_phase1_geo_int \
+#   --ckpt-ids ckpt-10 \
+#   --task pedestrian \
+#   --eval-episodes 50 \
+#   --eval-outdir eval_phase1_ped \
+#   --task-dim 16 \
+#   --geo-dim 8 \
+#   --int-dim 8 \
+#   --geo-type cross_attn \
+#   --interaction-type cross_attn \
+#   --num-old-experts 2 \
+#   --num-new-experts 1 \
+#   --level 3
+##################################################################################
+# Phase2
+# python evaluate_student_single_task_carla.py \
+#   --model-type stage2_moe \
+#   --ckpt-dir ../checkpoints_zgeo_zint/stage2_moe_ped_phase2_geo_int \
+#   --ckpt-ids ckpt-20 \
+#   --task pedestrian \
+#   --eval-episodes 50 \
+#   --eval-outdir eval_ped_ckpt20 \
+#   --task-dim 16 \
+#   --geo-dim 8 \
+#   --int-dim 8 \
+#   --geo-type cross_attn \
+#   --interaction-type cross_attn \
+#   --num-old-experts 3 \
+#   --num-new-experts 0 \
+#   --level 3
+#######################################################################################################################################################
+# STAGE1
+#########################################################################################################################################################
+# python evaluate_student_single_task_carla.py \
+#   --model-type stage1_moe \
+#   --ckpt-dir ../checkpoints_stage1_multitask/stage1_moe_lane_change \
+#   --ckpt-ids ckpt-10 ckpt-15 ckpt-20 \
+#   --task lane_keeping \
+#   --eval-episodes 50 \
+#   --eval-outdir eval_stage1_lane \
+#   --task-dim 16 \
+#   --num-experts 2 \
+#   --level 1
+
+
+# python evaluate_student_single_task_carla.py \
+#   --model-type stage1_moe \
+#   --ckpt-dir ../checkpoints_stage1_multitask/stage1_moe_lane_change \
+#   --ckpt-ids ckpt-10 ckpt-15 ckpt-20 \
+#   --task change_lane \
+#   --eval-episodes 50 \
+#   --eval-outdir eval_stage1_change \
+#   --task-dim 16 \
+#   --num-experts 2 \
+#   --level 3
+########################################################################################################################################################
+# STAGE2 PHASE1 WITH GEO AND INT
+########################################################################################################################################################
+# python evaluate_student_single_task_carla.py \
+#   --model-type stage2_moe \
+#   --ckpt-dir ../checkpoints_stage2_multitask/stage2_moe_ped_phase1_simple \
+#   --ckpt-ids ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20 \
+#   --task pedestrian \
+#   --eval-episodes 50 \
+#   --eval-outdir eval_stage2_phase1_ped_multitask \
+#   --task-dim 16 \
+#   --num-old-experts 2 \
+#   --num-new-experts 1 \
+#   --level 3
+
+
+# python evaluate_student_single_task_carla.py \
+#   --model-type stage2_moe \
+#   --ckpt-dir checkpoints_stage2_multitask/stage2_moe_ped_phase1_simple \
+#   --ckpt-ids ckpt-16 \
+#   --task pedestrian \
+#   --eval-episodes 50 \
+#   --eval-outdir eval_stage2_phase1_ped_ckpt16 \
+#   --task-dim 16 \
+#   --num-old-experts 2 \
+#   --num-new-experts 1 \
+#   --use-geo \
+
+### EVALUATION MULTI CKPT COMMANDS ###
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+# Exemplo para um teste curto do Stage 2 MoE:
+# python evaluate_student_ckpts_carla.py \
+#   --model-type stage2_moe \
+#   --ckpt-dir ../checkpoints/stage2_moe_ped_phase2_curve_taskmode_ctr \
+#   --ckpt-ids ckpt-14 \
+#   --tasks lane_keeping pedestrian \
+#   --eval-episodes 5 \
+#   --eval-outdir eval_smoke_test \
+#   --task-dim 16 \
+#   --mode-dim 8 \
+#   --num-old-experts 3 \
+#   --num-new-experts 0
+### TSNE EMBEDDING COMMANDS ###
+        print(" -", name)
+
+
+if __name__ == "__main__":
+    main()
+
+
+# python3 plot_tsne_embeddings.py \
+#   --npz Arquitetura/checkpoints_zint/stage2_moe_ped_phase1_zint/embeddings/epoch_060_embeddings.npz \
+#   --outdir Arquitetura/checkpoints_zint/stage2_moe_ped_phase1_zint/tsne_epoch060
+
+
+# com menos pontos
+# python3 plot_tsne_embeddings.py \
+#   --npz Arquitetura/checkpoints_zint/stage2_moe_ped_phase1_zint/embeddings/epoch_060_embeddings.npz \
+#   --outdir Arquitetura/checkpoints_zint/stage2_moe_ped_phase1_zint/tsne_epoch060 \
+#   --max-points 3000 \
+#   --perplexity 30

@@ -1,0 +1,216 @@
+
+====================================================================================================
+path: test_CARLA/Resultados/baselines/ft_no_replay_pedestrian/change_lane/summary_results_change_lane.json
+task: change_lane
+episodes: [50]
+checkpoints: ckpt-26 ckpt-30 ckpt-35
+best_checkpoint: ckpt-35
+best_success_rate: 0.12
+
+====================================================================================================
+path: test_CARLA/Resultados/baselines/ft_no_replay_pedestrian/lane_keeping/summary_results_lane_keeping.json
+task: lane_keeping
+episodes: [50]
+checkpoints: ckpt-26 ckpt-30 ckpt-35
+best_checkpoint: ckpt-35
+best_success_rate: 0.94
+
+====================================================================================================
+path: test_CARLA/Resultados/baselines/ft_no_replay_pedestrian/pedestrian/summary_results_pedestrian.json
+task: pedestrian
+episodes: [50]
+checkpoints: ckpt-26 ckpt-30 ckpt-35
+best_checkpoint: ckpt-35
+best_success_rate: 0.6
+
+====================================================================================================
+path: test_CARLA/Resultados/baselines/zero_shot_stage1_ckpt20/pedestrian/summary_results_pedestrian.json
+task: pedestrian
+episodes: [50]
+checkpoints: ckpt-20
+best_checkpoint: ckpt-20
+best_success_rate: 0.04
+
+====================================================================================================
+path: test_CARLA/Resultados/stage1/change_lane/summary_results_change_lane.json
+task: change_lane
+episodes: [50]
+checkpoints: ckpt-10 ckpt-15 ckpt-20
+best_checkpoint: ckpt-20
+best_success_rate: 0.52
+
+====================================================================================================
+path: test_CARLA/Resultados/stage1/lane_keeping/summary_results_lane_keeping.json
+task: lane_keeping
+episodes: [50]
+checkpoints: ckpt-10 ckpt-15 ckpt-20
+best_checkpoint: ckpt-20
+best_success_rate: 0.84
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/FT/change_lane/summary_results_change_lane.json
+task: change_lane
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-14
+best_success_rate: 0.34
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/FT/lane_keeping/summary_results_lane_keeping.json
+task: lane_keeping
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-14
+best_success_rate: 0.92
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/FT/pedestrian/summary_results_pedestrian.json
+task: pedestrian
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-10
+best_success_rate: 0.56
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/GeoInt/change_lane/summary_results_change_lane.json
+task: change_lane
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-10
+best_success_rate: 0.3
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/GeoInt/lane_keeping/summary_results_lane_keeping.json
+task: lane_keeping
+episodes: [50]
+checkpoints: ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-20
+best_success_rate: 0.94
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/GeoInt/pedestrian/summary_results_pedestrian.json
+task: pedestrian
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-16
+best_success_rate: 0.56
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/Ours/change_lane/summary_results_change_lane.json
+task: change_lane
+episodes: [50]
+checkpoints: ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-20
+best_success_rate: 0.58
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/Ours/lane_keeping/summary_results_lane_keeping.json
+task: lane_keeping
+episodes: [50]
+checkpoints: ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-14
+best_success_rate: 0.68
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/Ours/pedestrian/summary_results_pedestrian.json
+task: pedestrian
+episodes: [50]
+checkpoints: ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-16
+best_success_rate: 0.52
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/Proto_AW/change_lane/summary_results_change_lane.json
+task: change_lane
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-16
+best_success_rate: 0.14
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/Proto_AW/lane_keeping/summary_results_lane_keeping.json
+task: lane_keeping
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-10
+best_success_rate: 0.94
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/Proto_AW/pedestrian/summary_results_pedestrian.json
+task: pedestrian
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-18
+best_success_rate: 0.62
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/Proto_RP/change_lane/summary_results_change_lane.json
+task: change_lane
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-10
+best_success_rate: 0.36
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/Proto_RP/lane_keeping/summary_results_lane_keeping.json
+task: lane_keeping
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-10
+best_success_rate: 1.0
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase1/Proto_RP/pedestrian/summary_results_pedestrian.json
+task: pedestrian
+episodes: [50]
+checkpoints: ckpt-10 ckpt-12 ckpt-14 ckpt-16 ckpt-18 ckpt-20
+best_checkpoint: ckpt-12
+best_success_rate: 0.98
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase2/Ours/change_lane/summary_results_change_lane.json
+task: change_lane
+episodes: [50]
+checkpoints: ckpt-8 ckpt-10 ckpt-14 ckpt-18
+best_checkpoint: ckpt-10
+best_success_rate: 0.72
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase2/Ours/lane_keeping/summary_results_lane_keeping.json
+task: lane_keeping
+episodes: [50]
+checkpoints: ckpt-8 ckpt-10 ckpt-14 ckpt-18
+best_checkpoint: ckpt-8
+best_success_rate: 1.0
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase2/Ours/pedestrian/summary_results_pedestrian.json
+task: pedestrian
+episodes: [50]
+checkpoints: ckpt-8 ckpt-10 ckpt-14 ckpt-18
+best_checkpoint: ckpt-10
+best_success_rate: 0.7
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase2/Proto_AW/change_lane/summary_results_change_lane.json
+task: change_lane
+episodes: [50]
+checkpoints: ckpt-8 ckpt-10 ckpt-14 ckpt-18
+best_checkpoint: ckpt-10
+best_success_rate: 0.38
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase2/Proto_AW/lane_keeping/summary_results_lane_keeping.json
+task: lane_keeping
+episodes: [50]
+checkpoints: ckpt-8 ckpt-10 ckpt-14 ckpt-18
+best_checkpoint: ckpt-8
+best_success_rate: 1.0
+
+====================================================================================================
+path: test_CARLA/Resultados/stage2/phase2/Proto_AW/pedestrian/summary_results_pedestrian.json
+task: pedestrian
+episodes: [50]
+checkpoints: ckpt-8 ckpt-10 ckpt-14 ckpt-18
+best_checkpoint: ckpt-10
+best_success_rate: 0.9
