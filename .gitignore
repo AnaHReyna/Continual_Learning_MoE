@@ -33,3 +33,10 @@ Teacher/**/*.npz
 Teacher/**/ckpt-*
 Teacher/**/events.out*
 Teacher/**/tb/
+
+# Teacher training outputs
+Teacher/train/tasks/
+
+export_rollouts/datasets/*
+
+!export_rollouts/datasets/export_rollouts.py
